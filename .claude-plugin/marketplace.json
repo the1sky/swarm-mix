@@ -1,0 +1,23 @@
+{
+  "name": "swarm-mix-local",
+  "description": "Official plugin catalog for Swarm Mix (the1sky/swarm-mix)",
+  "owner": {
+    "name": "the1sky",
+    "url": "https://github.com/the1sky"
+  },
+  "plugins": [
+    {
+      "name": "swarm-mix",
+      "description": "多代理三级算力分流与跨模型家族强制互审插件（Claude Code / Antigravity / Codex 统一包）",
+      "version": "2.0.0",
+      "source": "./",
+      "homepage": "https://github.com/the1sky/swarm-mix",
+      "repository": "https://github.com/the1sky/swarm-mix",
+      "license": "MIT",
+      "author": {
+        "name": "the1sky",
+        "url": "https://github.com/the1sky"
+      }
+    }
+  ]
+}

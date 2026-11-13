@@ -1,0 +1,21 @@
+{
+  "name": "swarm-mix",
+  "displayName": "Swarm Mix (多端异构编排)",
+  "version": "2.0.0",
+  "description": "跨平台（Antigravity / Claude Code / Codex）多代理三级算力分流与跨模型家族强制互审插件：核心攻坚用旗舰、常规编码用均衡档、检索杂务用轻量档，审查节点强制跨厂商异构验收。",
+  "author": {
+    "name": "the1sky",
+    "url": "https://github.com/the1sky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/the1sky/swarm-mix.git"
+  },
+  "homepage": "https://github.com/the1sky/swarm-mix#readme",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "用 Swarm 并行重构当前模块，按默认异构规则分配编码、跨家族 Verifier 与文档节点",
+    "启动多代理并发排查问题：检索节点用轻量模型扫描定位，核心节点修复并跨家族验收",
+    "检查当前可用模型的实时配额水位并规划角色拓扑"
+  ]
+}

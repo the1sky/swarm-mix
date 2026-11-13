@@ -1,0 +1,39 @@
+{
+  "name": "swarm-mix",
+  "version": "2.0.0",
+  "description": "多代理三级算力分流与跨模型家族强制互审插件（Codex / Claude Code / Antigravity 统一包）：常规编码分流均衡 Worker，关键改动强制调 Claude Opus 跨家族验收。",
+  "author": {
+    "name": "the1sky",
+    "url": "https://github.com/the1sky"
+  },
+  "homepage": "https://github.com/the1sky/swarm-mix",
+  "repository": "https://github.com/the1sky/swarm-mix.git",
+  "license": "MIT",
+  "keywords": [
+    "swarm",
+    "multi-model",
+    "code-review",
+    "cross-family",
+    "subagents"
+  ],
+  "skills": "./skills/",
+  "agents": "./platforms/codex/agents/",
+  "interface": {
+    "displayName": "Swarm Mix (异构编排)",
+    "shortDescription": "多代理三级算力分流与 GPT ↔ Claude 跨家族独立代码互审",
+    "longDescription": "统一管理多代理任务中的三级算力分流（核心攻坚、常规模块编码、轻量只读检索）与跨模型家族独立 Diff 审查，消除单一模型同源盲区并节约旗舰配额。",
+    "developerName": "the1sky",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "使用 $swarm-mix 并行拆分当前改动，并在完成后做跨家族代码审查。",
+      "使用 $swarm-mix 派轻量检索代理定位问题根因，修复后执行跨家族验收。"
+    ],
+    "brandColor": "#3B82F6",
+    "websiteURL": "https://github.com/the1sky/swarm-mix",
+    "logo": "./assets/logo.svg"
+  }
+}
