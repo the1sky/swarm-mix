@@ -1,12 +1,9 @@
-<p align="center">
-  <img src="./assets/logo.svg" width="88" height="88" alt="Swarm Mix Logo" />
-</p>
+<h1>
+  <img src="./assets/logo.svg" align="left" width="44" height="44" alt="Swarm Mix Logo" />
+  Swarm Mix (<code>swarm-mix</code>)
+</h1>
 
-<h1 align="center">Swarm Mix (<code>swarm-mix</code>)</h1>
-
-<p align="center">
-  <a href="./README.md">English</a> | <strong>简体中文</strong>
-</p>
+[English](./README.md) | **简体中文**
 
 一套同时兼容 **Google Antigravity**、**Claude Code** 与 **OpenAI Codex** 的多宿主插件，为多代理协作注入默认的**三级算力分流**与**跨模型家族强制交叉审查**。
 
