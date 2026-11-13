@@ -1,6 +1,12 @@
-# Swarm Mix (`swarm-mix`)
+<p align="center">
+  <img src="./assets/logo.svg" width="88" height="88" alt="Swarm Mix Logo" />
+</p>
 
-English | [简体中文](./README.zh-CN.md)
+<h1 align="center">Swarm Mix (<code>swarm-mix</code>)</h1>
+
+<p align="center">
+  <strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a>
+</p>
 
 A unified multi-host plugin for **Google Antigravity**, **Claude Code**, and **OpenAI Codex** that enforces **3-tier model routing** and **mandatory cross-family code verification**.
 
