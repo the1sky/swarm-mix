@@ -17,10 +17,18 @@
 
 ## 安装方式
 
-### 1. 发一句话让 Agent 自动装（最省事）
+### 1. 自然语言安装（直接复制发给 Agent）
 
+在 **Antigravity**、**Claude Code** 或 **Codex** 对话框中直接发送（统一克隆至 `~/.local/share/swarm-mix`，不污染当前项目目录）：
+
+**自动识别本机客户端一键安装 / 更新（推荐）**
 ```text
-请克隆 https://github.com/the1sky/swarm-mix.git 并执行 ./install.sh，为本机已装客户端配置 swarm-mix 插件。
+请帮我从 https://github.com/the1sky/swarm-mix.git 安装或更新 swarm-mix（克隆到 ~/.local/share/swarm-mix，若已存在则先 git pull），执行 ./install.sh 完成本机客户端配置，并运行 ~/.local/bin/swarm-router --host auto -m 验证路由表生效。
+```
+
+**仅在当前客户端独立安装（不改动其它工具目录）**
+```text
+请从 https://github.com/the1sky/swarm-mix.git 仅为我当前正在使用的这个客户端安装 swarm-mix 插件与技能（不要修改本机其它 Agent 客户端配置），装好后运行 model_router.py --host auto -m 验证。
 ```
 
 ### 2. 一行命令全平台安装（自动识别 Antigravity / Claude Code / Codex）

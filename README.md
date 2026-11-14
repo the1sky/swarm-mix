@@ -17,12 +17,23 @@ A unified multi-host plugin for **Google Antigravity**, **Claude Code**, and **O
 
 ## Install
 
-### 1. Ask Your Agent (Zero Manual Setup)
+### 1. Natural Language Install (Copy & Paste to Your Agent)
 
-Paste into Antigravity, Claude Code, or Codex:
+Send directly in **Antigravity**, **Claude Code**, or **OpenAI Codex** (clones into `~/.local/share/swarm-mix` so your current workspace stays clean):
 
+**Auto-install across all detected hosts (Recommended)**
 ```text
-Clone https://github.com/the1sky/swarm-mix.git and run ./install.sh to install swarm-mix across all detected agent hosts on my machine.
+Install swarm-mix from https://github.com/the1sky/swarm-mix.git into ~/.local/share/swarm-mix (pull latest if it already exists), run ./install.sh, enable the plugin if needed, and run ~/.local/bin/swarm-router --host auto -m to verify.
+```
+
+**中文自然语言一键安装 / 更新（直接发给任意 Agent）**
+```text
+请帮我从 https://github.com/the1sky/swarm-mix.git 安装或更新 swarm-mix（克隆到 ~/.local/share/swarm-mix 避免污染当前工作区，若已存在则 git pull），执行 ./install.sh 完成配置，并运行 ~/.local/bin/swarm-router --host auto -m 验证生效。
+```
+
+**Install into current host only (Standalone)**
+```text
+Install swarm-mix from https://github.com/the1sky/swarm-mix.git into this agent client only (do not modify other agent tools on my machine), then verify with model_router.py --host auto -m.
 ```
 
 ### 2. One-Liner (Auto-Detects Antigravity, Claude Code & Codex)
