@@ -35,3 +35,6 @@
 ## 3. 运行时模型热切换约束
 - 升降级算力或触发低配额告警时，须在目标成员处于 `waiting` 状态时调用 `swarm(action="model", name="...", model="...")` 无损保留上下文切换；若处于 `working` 则等待当前轮次结束。
 - **严禁通过 `kill` + 重新 `add` 更换模型**，以免销毁对话历史与 `share`/`branch` 隔离工作区。
+
+## 4. Swarm Token 账单与空转监控
+- 原生 Swarm 面板仅展示模型与状态；若需核查各 Worker / Subagent 的 `input_tokens`、`cache_read_tokens`、`output_tokens` 及分模型占比，运行 `../scripts/swarm_tokens.py --host agy --markdown`（或终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。

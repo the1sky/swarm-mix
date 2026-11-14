@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "swarm-mix",
-      "description": "多代理三级算力分流与跨模型家族强制互审插件（Claude Code / Antigravity / Codex 统一包）",
-      "version": "2.0.0",
+      "description": "多代理三级算力分流、跨模型家族强制互审与分模型 Token 账单审计插件（Claude Code / Antigravity / Codex 统一包）",
+      "version": "2.1.0",
       "source": "./",
       "homepage": "https://github.com/the1sky/swarm-mix",
       "repository": "https://github.com/the1sky/swarm-mix",

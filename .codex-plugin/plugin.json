@@ -1,7 +1,7 @@
 {
   "name": "swarm-mix",
-  "version": "2.0.0",
-  "description": "多代理三级算力分流与跨模型家族强制互审插件（Codex / Claude Code / Antigravity 统一包）：常规编码分流均衡 Worker，关键改动强制调 Claude Opus 跨家族验收。",
+  "version": "2.1.0",
+  "description": "多代理三级算力分流、跨模型家族强制互审与分模型 Token 账单审计插件（Codex / Claude Code / Antigravity 统一包）。",
   "author": {
     "name": "the1sky",
     "url": "https://github.com/the1sky"

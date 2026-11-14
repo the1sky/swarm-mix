@@ -11,6 +11,7 @@ A unified multi-host plugin for **Google Antigravity**, **Claude Code**, and **O
 
 - **Stop burning flagship quota on chores**: Routes complex architecture to flagship models (`L1`), module coding to balanced models (`L2`), and read-only search/docs/daemons to fast lightweight models (`L3`).
 - **Eliminate single-family blind spots**: Forces independent code review (`verifier`) onto a **different model family** (Gemini ↔ Claude, Claude ↔ OpenAI Codex) at `Medium` effort by default, stepping up to `High` for concurrency, core architecture, or security changes.
+- **Per-agent & per-model token ledger (`swarm-tokens`)**: Fills the missing token visibility gap in native Swarm UIs — inspect uncached input, cache hit rate, output tokens, model-tier shares, and runaway daemon hotspots across Antigravity, Claude Code, and Codex.
 
 ---
 
@@ -68,6 +69,17 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 | **L2 Standard Coding** | `Gemini 4 Argon (High)` / `Claude Sonnet 5.5 (High)` | `std-author` → `Sonnet (High)` | `std-author` (`Medium`) |
 | **Cross-Family Review** | Gemini ↔ `Claude Opus 5.5` / `Gemini 4 Carbon` *(`Medium`, `High` for high-risk)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`, fallback `sonnet`)* |
 | **L3 Scout / Docs / Daemons** | `Gemini 4 Hydrogen (Medium)` *(incl. `narrator` & `monitor`)* | `fast-scout` → `Haiku (Medium)` | `fast-scout` (`Low`) |
+
+## Token Observability (`swarm-tokens`)
+
+Ask your agent *"Show token usage for my latest Swarm"*, or run `swarm-tokens` directly in your terminal:
+
+```bash
+swarm-tokens                   # Per-agent & per-model token ledger for the latest Swarm
+swarm-tokens --watch 3         # Live auto-refreshing dashboard while a Swarm runs
+swarm-tokens --list -n 10      # List recent multi-agent sessions across AGY / Claude / Codex
+swarm-tokens --host agy -m     # Export Markdown tables (or --json for automation)
+```
 
 ## Notes
 

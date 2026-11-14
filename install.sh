@@ -74,4 +74,15 @@ if [ -d "$HOME/.codex" ] || command -v codex >/dev/null 2>&1; then
   echo "  [✔] Codex       -> $HOME/.codex/{plugins,skills,agents}"
 fi
 
+# 4. CLI Token Inspector (~/.local/bin/swarm-tokens)
+chmod +x "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py"
+mkdir -p "$HOME/.local/bin"
+if [ "$MODE" = "link" ]; then
+  ln -sf "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
+else
+  cp -f "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
+  chmod +x "$HOME/.local/bin/swarm-tokens"
+fi
+echo "  [✔] CLI         -> $HOME/.local/bin/swarm-tokens"
+
 echo "Done."

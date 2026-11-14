@@ -11,6 +11,7 @@
 
 - **三级算力分流**：核心攻坚用旗舰（`L1`）、常规模块编码用均衡档（`L2`）、只读检索/文档/守护用高速轻量档（`L3`），避免杂务空耗旗舰配额。
 - **跨家族强制互审**：独立验收节点（`verifier`）强制切换至异构模型家族（Gemini ↔ Claude、Claude ↔ OpenAI Codex），日常用 `Medium`，并发/核心架构/安全变更自动升 `High`。
+- **多端 Token 透明账单 (`swarm-tokens`)**：补齐官方 Swarm 面板无 Token 统计的空白，支持按 Worker / 模型梯队查看新增输入、缓存命中率、输出消耗及空转守护进程告警。
 
 ---
 
@@ -66,6 +67,17 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 | **L2 常规编码** | `Gemini 4 Argon (High)` / `Claude Sonnet 5.5 (High)` | `std-author` → `Sonnet (High)` | `std-author`（`Medium`） |
 | **跨家族互审** | Gemini ↔ `Opus 5.5` / `Carbon` *(日常 `Medium`，高危 `High`)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`，回退 `sonnet`)* |
 | **L3 轻量与守护** | `Gemini 4 Hydrogen (Medium)` *(含 `narrator` / `monitor`)* | `fast-scout` → `Haiku (Medium)` | `fast-scout`（`Low`） |
+
+## Token 消耗审计 (`swarm-tokens`)
+
+直接对 Agent 说「查看最近一次 Swarm 的 token 消耗」，或在终端运行安装脚本自动注入的 `swarm-tokens`：
+
+```bash
+swarm-tokens                   # 查看最近一次 Swarm / 多代理会话的分成员与分模型账单
+swarm-tokens --watch 3         # 每 3 秒实时刷新运行中 Swarm 的消耗与缓存命中率
+swarm-tokens --list -n 10      # 列出跨 Antigravity / Claude Code / Codex 的近期会话
+swarm-tokens --host agy -m     # 输出 Markdown 表格（支持 --json 导出结构化数据）
+```
 
 ## 使用说明
 

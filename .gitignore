@@ -3,3 +3,5 @@ __MACOSX/
 *.swp
 *~
 .in_use/
+__pycache__/
+*.py[cod]
