@@ -1,6 +1,6 @@
 {
   "name": "swarm_mix_board",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "license": "MIT",
   "description": "Swarm Mix Sidecar UI: Live Swarm board, roster, and per-agent/per-model token ledger."

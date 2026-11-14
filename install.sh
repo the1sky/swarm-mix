@@ -74,15 +74,20 @@ if [ -d "$HOME/.codex" ] || command -v codex >/dev/null 2>&1; then
   echo "  [✔] Codex       -> $HOME/.codex/{plugins,skills,agents}"
 fi
 
-# 4. CLI Token Inspector (~/.local/bin/swarm-tokens)
-chmod +x "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$SRC_DIR/skills/swarm-mix/scripts/codex_bridge.py"
+# 4. CLI Inspectors (~/.local/bin/swarm-tokens & ~/.local/bin/swarm-router)
+chmod +x \
+  "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" \
+  "$SRC_DIR/skills/swarm-mix/scripts/codex_bridge.py" \
+  "$SRC_DIR/skills/swarm-mix/scripts/model_router.py"
 mkdir -p "$HOME/.local/bin"
 if [ "$MODE" = "link" ]; then
   ln -sf "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
+  ln -sf "$SRC_DIR/skills/swarm-mix/scripts/model_router.py" "$HOME/.local/bin/swarm-router"
 else
   cp -f "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
-  chmod +x "$HOME/.local/bin/swarm-tokens"
+  cp -f "$SRC_DIR/skills/swarm-mix/scripts/model_router.py" "$HOME/.local/bin/swarm-router"
+  chmod +x "$HOME/.local/bin/swarm-tokens" "$HOME/.local/bin/swarm-router"
 fi
-echo "  [✔] CLI         -> $HOME/.local/bin/swarm-tokens"
+echo "  [✔] CLI         -> $HOME/.local/bin/{swarm-tokens,swarm-router}"
 
 echo "Done."

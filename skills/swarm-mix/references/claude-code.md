@@ -2,6 +2,14 @@
 
 在 Claude Code 中委派子代理时，禁止一刀切继承高成本主模型；按职责匹配本插件注册的子代理角色（插件模式下标识带命名空间前缀 `swarm-mix:`，软链模式下为裸名，按当前会话可用 `subagent_type` 列表选取）：
 
+## 0. 动态能力路由预检（支持纯 Claude 独立运行）
+派发多代理任务前，可执行一次零依赖能力探测：
+```bash
+python3 "<本SKILL所在目录>/scripts/model_router.py" --host claude -m
+```
+- **纯 Claude Code 独立环境**：未安装 Codex / Antigravity CLI 时静默跳过外部桥接（退出码 `0`），100% 在原生 `opus` / `sonnet` / `haiku` 三档间分流。
+- **多厂共存专长分流**：检测到本机已登录 `codex` 时，除由 `cross-verifier` 执行跨家族审查外，针对高密算法/复杂状态机子任务（`algorithm_state`）亦可按推荐表调用 `scripts/codex_bridge.py --mode exec --sandbox workspace-write` 协同攻坚；验收闭环后可选执行 `model_router.py record` 沉淀通过率以驱动 L3 贝叶斯自校准。
+
 ## 1. 角色三级算力分流
 
 | 层级 | 子代理标识 (`subagent_type`) | 底层模型与推理档位 | 适用职责与边界 |

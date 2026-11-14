@@ -2,6 +2,14 @@
 
 在 Codex 中需要并行拆分子任务或对重要代码改动做独立验收时，按以下三级分流与跨家族互审协议执行（调用 `spawn_agent` 时关闭父会话全文继承 `fork_context=false` / `fork_turns="none"`，传入自包含任务卡）：
 
+## 0. 动态目录发现与能力路由预检（支持纯 Codex 独立运行）
+拆分多代理任务前，可执行一次零依赖能力探测（自动解析 `~/.codex/config.toml` 与本地模型目录如 `gpt-6-astra/sol/luna` 的真实上下文窗口与优先级）：
+```bash
+python3 "<本SKILL所在目录>/scripts/model_router.py" --host codex -m
+```
+- **纯 Codex 独立环境**：本机未安装 `claude` 或 `agy` CLI 时静默跳过外部通道（退出码 `0`），自动在 Codex 本地可用目录模型（L1 旗舰 / L2 均衡 / L3 轻量）间完成原生分流与同系独立上下文复核。
+- **多厂共存专长分流**：检测到本机 `claude`（或 `agy`）可用时，`cross_verify` 自动路由至异构家族审查；验收闭环后可选执行 `model_router.py record` 驱动 L3 贝叶斯权重校准。
+
 ## 1. 角色三级算力分流
 
 | 层级 | 执行载体 (`agent_type`) | 模型与思考档位 | 适用职责与边界 |

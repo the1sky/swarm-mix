@@ -22,6 +22,9 @@
     assetVersion: '',
     snap: null,
     sessionsLoadedAt: 0,
+    capHost: 'agy',
+    capLoadedAt: 0,
+    capabilities: null,
   };
 
   // ---------- Host Theme Sync (`preload.js` + `prefers-color-scheme`) ----------
@@ -173,7 +176,15 @@
     tokens: $('panel-tokens'),
     members: $('panel-members'),
     board: $('panel-board'),
+    models: $('panel-models'),
   };
+
+  function syncEmptyStateVisibility() {
+    const hasSnap = Boolean(uiState.snap);
+    const showGrid = hasSnap || uiState.tab === 'models';
+    $('empty-state').hidden = showGrid;
+    document.querySelector('.panels-grid').hidden = !showGrid;
+  }
 
   function selectTab(name, focusTab = false) {
     if (!tabPanels[name]) return;
@@ -195,6 +206,10 @@
         panel.setAttribute('hidden', 'until-found');
         panel.removeAttribute('tabindex');
       }
+    }
+    syncEmptyStateVisibility();
+    if (name === 'models' && !uiState.capabilities) {
+      refreshCapabilities(true);
     }
   }
 
@@ -280,6 +295,17 @@
   $('board-follow').addEventListener('change', (e) => {
     uiState.boardFollow = Boolean(e.target.checked);
   });
+
+  for (const hbtn of document.querySelectorAll('.cap-host-btn')) {
+    hbtn.addEventListener('click', () => {
+      const h = hbtn.getAttribute('data-cap-host') || 'agy';
+      uiState.capHost = h;
+      for (const b of document.querySelectorAll('.cap-host-btn')) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-cap-host') === h ? 'true' : 'false');
+      }
+      refreshCapabilities(true);
+    });
+  }
 
   // Delegate member chat open & board #seq jump clicks
   document.addEventListener('click', (e) => {
@@ -531,6 +557,121 @@
     }
   }
 
+  function fmtCtx(tokens) {
+    const n = Number(tokens) || 0;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M ctx`;
+    if (n >= 1_000) return `${Math.round(n / 1_000)}K ctx`;
+    return `${n} ctx`;
+  }
+
+  function renderCapabilities(cap) {
+    if (!cap || !cap.ok) return;
+    const models = cap.models || [];
+    $('badge-models').textContent = String(models.length);
+
+    const poolsEl = $('cap-pools');
+    const pools = cap.pools || {};
+    poolsEl.innerHTML = Object.entries(pools)
+      .map(([k, v]) => {
+        const ready = !String(v).includes('not_') && v !== 'unavailable';
+        return `<span class="pool-pill" data-ready="${ready}">${esc(k)}: ${esc(v)}</span>`;
+      })
+      .join('');
+
+    const rgrid = $('routing-grid');
+    const recs = Object.values(cap.recommendations || {});
+    rgrid.innerHTML = recs
+      .map((r) => {
+        const isBridge = r.channel !== 'native';
+        return `<article class="route-card">
+          <div class="route-head">
+            <span class="route-task">${esc(r.label || r.task)}</span>
+            <span class="route-score">${Number(r.match_score || 0).toFixed(2)}</span>
+          </div>
+          <div class="route-model">${esc(r.recommended_model)}</div>
+          <div class="route-meta">
+            <span class="chan-badge" data-bridge="${isBridge}">${esc(r.channel)}</span>
+            <span>${esc(r.rationale)}</span>
+            ${r.fallback_model ? `<span>· alt: ${esc(r.fallback_model)}</span>` : ''}
+          </div>
+        </article>`;
+      })
+      .join('');
+
+    const mlist = $('models-list');
+    const dimDefs = [
+      ['Arch', 'architecture_refactor'],
+      ['Algo', 'algorithm_state'],
+      ['UI/MM', 'frontend_multimodal'],
+      ['Bug', 'bug_hunting'],
+      ['Speed', 'throughput_efficiency'],
+    ];
+    mlist.innerHTML = models
+      .map((m) => {
+        const t = m.tier || 'l2';
+        const isBridge = m.channel !== 'native';
+        const qBadge =
+          m.quota_pct !== null && m.quota_pct !== undefined
+            ? `<span class="chan-badge">${Math.round(Number(m.quota_pct) * 100)}% quota</span>`
+            : '';
+        const emp = m.empirical || {};
+        const hasEmp = (emp.author_tasks || 0) > 0 || (emp.verifier_reviews || 0) > 0;
+        const shiftVal = (emp.author_shift || 0) + (emp.verify_shift || 0);
+        const shiftStr =
+          shiftVal !== 0 ? `<span class="emp-shift">Bayesian Δ ${shiftVal > 0 ? '+' : ''}${shiftVal.toFixed(3)}</span>` : '';
+        return `<article class="member-card" role="listitem" data-tier="${esc(t)}">
+          <div class="member-top">
+            <span class="tier-dot" data-tier="${esc(t)}"></span>
+            <strong class="member-name">${esc(m.id)}</strong>
+            <span class="tier-chip" data-tier="${esc(t)}">${esc(String(m.vendor || '').toUpperCase())} · ${esc(tierLabel(t))}</span>
+            <span class="chan-badge" data-bridge="${isBridge}">${esc(m.channel)}</span>
+            ${qBadge}
+            <span class="spacer"></span>
+            <span class="member-model">${esc(fmtCtx(m.context_window))}</span>
+          </div>
+          <div class="dim-grid">
+            ${dimDefs
+              .map(([lbl, key]) => {
+                const v = Number(m.scores?.[key] || 0);
+                const pct = Math.max(4, Math.min(100, Math.round(v * 100)));
+                return `<div class="dim-cell">
+                  <div class="dim-top"><span>${lbl}</span><strong>${pct}</strong></div>
+                  <div class="dim-track"><div class="dim-fill" style="width:${pct}%"></div></div>
+                </div>`;
+              })
+              .join('')}
+          </div>
+          ${
+            hasEmp
+              ? `<div class="emp-row">
+                  <span>L3 Empirical:</span>
+                  <span>Author pass ${emp.author_first_pass || 0}/${emp.author_tasks || 0}</span>
+                  <span>·</span>
+                  <span>Verify catches ${emp.verifier_bug_catches || 0}/${emp.verifier_reviews || 0}</span>
+                  ${shiftStr}
+                </div>`
+              : ''
+          }
+        </article>`;
+      })
+      .join('');
+  }
+
+  async function refreshCapabilities(force = false) {
+    const now = Date.now();
+    if (!force && now - uiState.capLoadedAt < 20000) return;
+    uiState.capLoadedAt = now;
+    try {
+      const cap = await apiGet(`/api/capabilities?host=${encodeURIComponent(uiState.capHost)}${force ? '&refresh=1' : ''}`);
+      if (cap && cap.ok) {
+        uiState.capabilities = cap;
+        renderCapabilities(cap);
+      }
+    } catch {
+      // ignore transient error
+    }
+  }
+
   // ---------- Polling Loop ----------
   async function refreshSessionDropdown() {
     const now = Date.now();
@@ -559,6 +700,7 @@
     let nextDelay = 2000;
     try {
       refreshSessionDropdown();
+      refreshCapabilities(false);
       const q = new URLSearchParams({
         conversationId: currentConvId(),
         target: uiState.target,
@@ -576,8 +718,7 @@
       if (!res.found) {
         uiState.snap = null;
         uiState.etag = '';
-        $('empty-state').hidden = false;
-        document.querySelector('.panels-grid').hidden = true;
+        syncEmptyStateVisibility();
         $('meta-line').textContent = 'No active Swarm detected yet';
         nextDelay = 3000;
       } else if (!res.unchanged) {

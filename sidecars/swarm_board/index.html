@@ -53,6 +53,10 @@
           <span>Board</span>
           <span id="badge-board" class="tab-pill">0</span>
         </button>
+        <button type="button" role="tab" id="tab-models" data-tab="models" aria-selected="false" tabindex="-1" class="tab-btn">
+          <span>Models</span>
+          <span id="badge-models" class="tab-pill">—</span>
+        </button>
       </div>
     </header>
 
@@ -156,6 +160,31 @@
             </label>
           </div>
           <div id="board-feed" class="board-feed" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <!-- Panel 4: 3-Layer Model Capability Discovery & Task Routing -->
+      <section role="tabpanel" id="panel-models" aria-labelledby="tab-models" hidden="until-found">
+        <div class="panel-inner">
+          <div class="roster-toolbar">
+            <div class="seg-mini" role="group" aria-label="Simulated host environment">
+              <button type="button" class="seg-btn cap-host-btn" data-cap-host="agy" aria-pressed="true">Antigravity</button>
+              <button type="button" class="seg-btn cap-host-btn" data-cap-host="claude" aria-pressed="false">Claude</button>
+              <button type="button" class="seg-btn cap-host-btn" data-cap-host="codex" aria-pressed="false">Codex</button>
+            </div>
+            <span class="spacer"></span>
+            <div id="cap-pools" class="pool-pills"></div>
+          </div>
+
+          <div class="section-head">
+            <h2 class="section-title">Adaptive Task Routing</h2>
+          </div>
+          <div id="routing-grid" class="routing-grid"></div>
+
+          <div class="section-head" style="margin-block-start: 4px;">
+            <h2 class="section-title">Discovered Models (L1 Catalog + L2 Priors + L3 Bayesian)</h2>
+          </div>
+          <div id="models-list" class="members-list" role="list"></div>
         </div>
       </section>
     </main>

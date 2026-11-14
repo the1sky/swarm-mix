@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = join(__dirname, '..', '..');
 const SWARM_TOKENS_PY = join(PLUGIN_ROOT, 'skills', 'swarm-mix', 'scripts', 'swarm_tokens.py');
+const MODEL_ROUTER_PY = join(PLUGIN_ROOT, 'skills', 'swarm-mix', 'scripts', 'model_router.py');
 const ID_RE = /^[0-9a-zA-Z_-]{4,64}$/;
 
 let SidecarApp;
@@ -53,9 +54,14 @@ try {
           return;
         }
         if (this._pages.has(u.pathname)) {
-          const html = await this._pages.get(u.pathname)(Object.fromEntries(u.searchParams));
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(html);
+          const pageOut = await this._pages.get(u.pathname)(Object.fromEntries(u.searchParams));
+          if (pageOut instanceof Response) {
+            res.writeHead(pageOut.status, { 'Content-Type': pageOut.contentType, ...pageOut.headers });
+            res.end(pageOut.body);
+          } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(pageOut);
+          }
           return;
         }
         if (this._apis.has(u.pathname)) {
@@ -915,6 +921,33 @@ for (const [route, [fname, ctype]] of Object.entries(STATIC_FILES)) {
     'GET'
   );
 }
+
+let capabilitiesCache = { host: '', at: 0, payload: null };
+
+app.api('/api/capabilities', (data = {}) => {
+  const reqHost = ['agy', 'claude', 'codex'].includes(String(data.host || '')) ? String(data.host) : 'agy';
+  const force = data.refresh === '1';
+  const now = Date.now();
+  if (!force && capabilitiesCache.payload && capabilitiesCache.host === reqHost && now - capabilitiesCache.at < 15000) {
+    return capabilitiesCache.payload;
+  }
+  if (!existsSync(MODEL_ROUTER_PY)) {
+    return { ok: false, host: reqHost, pools: {}, recommendations: {}, models: [] };
+  }
+  try {
+    const raw = execFileSync('python3', [MODEL_ROUTER_PY, '--host', reqHost], {
+      encoding: 'utf-8',
+      timeout: 4500,
+      maxBuffer: 2 * 1024 * 1024,
+    });
+    const parsed = JSON.parse(raw);
+    const payload = { ok: true, ...parsed };
+    capabilitiesCache = { host: reqHost, at: now, payload };
+    return payload;
+  } catch {
+    return { ok: false, host: reqHost, pools: {}, recommendations: {}, models: [] };
+  }
+}, 'GET');
 
 app.api('/api/sessions', () => {
   const appData = findAppDataDir();

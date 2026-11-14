@@ -1,0 +1,277 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-11-15",
+  "bayesian_config": {
+    "prior_pseudocount": 8.0,
+    "min_samples_to_adapt": 3,
+    "max_empirical_drift": 0.15
+  },
+  "task_profiles": {
+    "architecture": {
+      "label": "L1 Core Architecture & Complex Debugging",
+      "tier": "l1",
+      "preferred_effort": "high",
+      "weights": {
+        "architecture_refactor": 0.45,
+        "algorithm_state": 0.35,
+        "bug_hunting": 0.15,
+        "frontend_multimodal": 0.05,
+        "throughput_efficiency": 0.0
+      }
+    },
+    "algorithm_state": {
+      "label": "L1 Concurrency, State Machines & Algorithms",
+      "tier": "l1",
+      "preferred_effort": "high",
+      "weights": {
+        "algorithm_state": 0.55,
+        "bug_hunting": 0.25,
+        "architecture_refactor": 0.20,
+        "frontend_multimodal": 0.0,
+        "throughput_efficiency": 0.0
+      }
+    },
+    "frontend_ui": {
+      "label": "L1/L2 Frontend UI, CSS/DOM & Multimodal",
+      "tier": "l1",
+      "preferred_effort": "high",
+      "weights": {
+        "frontend_multimodal": 0.60,
+        "architecture_refactor": 0.25,
+        "throughput_efficiency": 0.10,
+        "algorithm_state": 0.05,
+        "bug_hunting": 0.0
+      }
+    },
+    "backend_refactor": {
+      "label": "L2 Standard Module Coding, Refactor & Tests",
+      "tier": "l2",
+      "preferred_effort": "high",
+      "weights": {
+        "architecture_refactor": 0.45,
+        "throughput_efficiency": 0.30,
+        "algorithm_state": 0.15,
+        "frontend_multimodal": 0.10,
+        "bug_hunting": 0.0
+      }
+    },
+    "cross_verify": {
+      "label": "Cross-Family Adversarial Diff Review",
+      "tier": "verify",
+      "preferred_effort": "medium",
+      "require_heterogeneous_family": true,
+      "weights": {
+        "bug_hunting": 0.55,
+        "algorithm_state": 0.25,
+        "architecture_refactor": 0.20,
+        "frontend_multimodal": 0.0,
+        "throughput_efficiency": 0.0
+      }
+    },
+    "scout_daemon": {
+      "label": "L3 Read-Only Scout, Docs & Daemons",
+      "tier": "l3",
+      "preferred_effort": "medium",
+      "weights": {
+        "throughput_efficiency": 0.75,
+        "architecture_refactor": 0.15,
+        "frontend_multimodal": 0.10,
+        "algorithm_state": 0.0,
+        "bug_hunting": 0.0
+      }
+    }
+  },
+  "models": {
+    "gemini-4-carbon": {
+      "vendor": "google",
+      "tier": "l1",
+      "context_window": 1000000,
+      "modalities": ["text", "image", "audio", "video", "pdf"],
+      "scores": {
+        "architecture_refactor": 0.93,
+        "algorithm_state": 0.92,
+        "frontend_multimodal": 0.96,
+        "bug_hunting": 0.91,
+        "throughput_efficiency": 0.58
+      }
+    },
+    "gemini-4-argon": {
+      "vendor": "google",
+      "tier": "l2",
+      "context_window": 1000000,
+      "modalities": ["text", "image", "audio", "video", "pdf"],
+      "scores": {
+        "architecture_refactor": 0.86,
+        "algorithm_state": 0.84,
+        "frontend_multimodal": 0.91,
+        "bug_hunting": 0.83,
+        "throughput_efficiency": 0.82
+      }
+    },
+    "gemini-4-hydrogen": {
+      "vendor": "google",
+      "tier": "l3",
+      "context_window": 1000000,
+      "modalities": ["text", "image", "audio", "video"],
+      "scores": {
+        "architecture_refactor": 0.72,
+        "algorithm_state": 0.70,
+        "frontend_multimodal": 0.78,
+        "bug_hunting": 0.68,
+        "throughput_efficiency": 0.96
+      }
+    },
+    "gemini-3.8-flash": {
+      "vendor": "google",
+      "tier": "l3",
+      "context_window": 1000000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.66,
+        "algorithm_state": 0.64,
+        "frontend_multimodal": 0.70,
+        "bug_hunting": 0.62,
+        "throughput_efficiency": 0.95
+      }
+    },
+    "claude-opus-5-5": {
+      "vendor": "anthropic",
+      "tier": "l1",
+      "context_window": 200000,
+      "modalities": ["text", "image", "pdf"],
+      "scores": {
+        "architecture_refactor": 0.96,
+        "algorithm_state": 0.93,
+        "frontend_multimodal": 0.92,
+        "bug_hunting": 0.95,
+        "throughput_efficiency": 0.52
+      }
+    },
+    "claude-sonnet-5-5": {
+      "vendor": "anthropic",
+      "tier": "l2",
+      "context_window": 200000,
+      "modalities": ["text", "image", "pdf"],
+      "scores": {
+        "architecture_refactor": 0.90,
+        "algorithm_state": 0.86,
+        "frontend_multimodal": 0.89,
+        "bug_hunting": 0.88,
+        "throughput_efficiency": 0.80
+      }
+    },
+    "claude-haiku-4-5": {
+      "vendor": "anthropic",
+      "tier": "l3",
+      "context_window": 200000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.71,
+        "algorithm_state": 0.68,
+        "frontend_multimodal": 0.73,
+        "bug_hunting": 0.67,
+        "throughput_efficiency": 0.95
+      }
+    },
+    "gpt-6-astra": {
+      "vendor": "openai",
+      "tier": "l1",
+      "context_window": 272000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.94,
+        "algorithm_state": 0.97,
+        "frontend_multimodal": 0.89,
+        "bug_hunting": 0.96,
+        "throughput_efficiency": 0.56
+      }
+    },
+    "gpt-6-sol": {
+      "vendor": "openai",
+      "tier": "l2",
+      "context_window": 272000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.88,
+        "algorithm_state": 0.90,
+        "frontend_multimodal": 0.85,
+        "bug_hunting": 0.89,
+        "throughput_efficiency": 0.81
+      }
+    },
+    "gpt-6-luna": {
+      "vendor": "openai",
+      "tier": "l3",
+      "context_window": 272000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.74,
+        "algorithm_state": 0.75,
+        "frontend_multimodal": 0.74,
+        "bug_hunting": 0.73,
+        "throughput_efficiency": 0.94
+      }
+    },
+    "gpt-5.6-sol": {
+      "vendor": "openai",
+      "tier": "l2",
+      "context_window": 272000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.85,
+        "algorithm_state": 0.87,
+        "frontend_multimodal": 0.82,
+        "bug_hunting": 0.86,
+        "throughput_efficiency": 0.80
+      }
+    },
+    "gpt-5.6-luna": {
+      "vendor": "openai",
+      "tier": "l3",
+      "context_window": 272000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.70,
+        "algorithm_state": 0.71,
+        "frontend_multimodal": 0.70,
+        "bug_hunting": 0.69,
+        "throughput_efficiency": 0.93
+      }
+    },
+    "gpt-oss-120b": {
+      "vendor": "openai-oss",
+      "tier": "l3",
+      "context_window": 128000,
+      "modalities": ["text"],
+      "scores": {
+        "architecture_refactor": 0.73,
+        "algorithm_state": 0.74,
+        "frontend_multimodal": 0.65,
+        "bug_hunting": 0.72,
+        "throughput_efficiency": 0.86
+      }
+    }
+  },
+  "vendor_tier_defaults": {
+    "google": {
+      "l1": { "architecture_refactor": 0.92, "algorithm_state": 0.91, "frontend_multimodal": 0.95, "bug_hunting": 0.90, "throughput_efficiency": 0.58 },
+      "l2": { "architecture_refactor": 0.85, "algorithm_state": 0.83, "frontend_multimodal": 0.90, "bug_hunting": 0.82, "throughput_efficiency": 0.82 },
+      "l3": { "architecture_refactor": 0.70, "algorithm_state": 0.68, "frontend_multimodal": 0.76, "bug_hunting": 0.66, "throughput_efficiency": 0.95 }
+    },
+    "anthropic": {
+      "l1": { "architecture_refactor": 0.95, "algorithm_state": 0.92, "frontend_multimodal": 0.91, "bug_hunting": 0.94, "throughput_efficiency": 0.52 },
+      "l2": { "architecture_refactor": 0.89, "algorithm_state": 0.85, "frontend_multimodal": 0.88, "bug_hunting": 0.87, "throughput_efficiency": 0.80 },
+      "l3": { "architecture_refactor": 0.70, "algorithm_state": 0.67, "frontend_multimodal": 0.72, "bug_hunting": 0.66, "throughput_efficiency": 0.95 }
+    },
+    "openai": {
+      "l1": { "architecture_refactor": 0.93, "algorithm_state": 0.96, "frontend_multimodal": 0.88, "bug_hunting": 0.95, "throughput_efficiency": 0.56 },
+      "l2": { "architecture_refactor": 0.87, "algorithm_state": 0.89, "frontend_multimodal": 0.84, "bug_hunting": 0.88, "throughput_efficiency": 0.81 },
+      "l3": { "architecture_refactor": 0.73, "algorithm_state": 0.74, "frontend_multimodal": 0.73, "bug_hunting": 0.72, "throughput_efficiency": 0.94 }
+    },
+    "other": {
+      "l1": { "architecture_refactor": 0.88, "algorithm_state": 0.88, "frontend_multimodal": 0.84, "bug_hunting": 0.88, "throughput_efficiency": 0.60 },
+      "l2": { "architecture_refactor": 0.82, "algorithm_state": 0.82, "frontend_multimodal": 0.80, "bug_hunting": 0.82, "throughput_efficiency": 0.80 },
+      "l3": { "architecture_refactor": 0.68, "algorithm_state": 0.68, "frontend_multimodal": 0.68, "bug_hunting": 0.66, "throughput_efficiency": 0.92 }
+    }
+  }
+}

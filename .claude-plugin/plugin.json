@@ -1,6 +1,6 @@
 {
   "name": "swarm-mix",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "多代理三级算力分流、跨模型家族强制互审与分模型 Token 账单审计插件（支持 Claude Code / Antigravity / Codex 同源安装）。",
   "author": {
     "name": "the1sky",

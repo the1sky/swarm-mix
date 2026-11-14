@@ -16,7 +16,7 @@ maxTurns: 15
 2. **选择思考档位**：
    - **默认日常审查**：`EFFORT="medium"`
    - **高危场景升档**：当任务卡提及**并发/异步竞态与状态机、跨模块核心架构契约变更、安全鉴权审计**（或常规修复两轮仍未定位根因）时，设为 `EFFORT="high"`。
-3. **调用 Codex 原生无痕只读审查**（不硬编码 `-m`，自动继承 `~/.codex/config.toml` 当前配置的旗舰主模型）：
+3. **调用 Codex 原生无痕只读审查**（默认不硬编码 `-m` 以自动继承 `~/.codex/config.toml` 旗舰主模型；若父会话根据 `model_router.py` 明确指定了目标模型 slug，则追加 `-m "<slug>"`）：
    - **默认审当前未提交改动**：
      ```bash
      codex exec review --uncommitted --ephemeral -c "model_reasoning_effort=\"${EFFORT}\"" "<任务卡指定的验收重点与不变量>"

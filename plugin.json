@@ -2,8 +2,8 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "swarm-mix",
   "displayName": "Swarm Mix",
-  "version": "2.2.0",
-  "description": "Heterogeneous multi-agent compute tiering, mandatory cross-family code verification, and per-agent token observability across Google Antigravity, Claude Code, and OpenAI Codex.",
+  "version": "2.3.0",
+  "description": "3-layer dynamic capability routing, heterogeneous multi-agent compute tiering, mandatory cross-family verification, and per-agent token observability across Antigravity, Claude Code, and OpenAI Codex.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "Refactor this module in parallel with Swarm using heterogeneous tiers and a cross-family verifier",

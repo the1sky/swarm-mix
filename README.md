@@ -72,10 +72,12 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 
 ## Token Observability (`Swarm Mix` Sidecar UI & `swarm-tokens`)
 
-- **Native Antigravity Sidecar Panel**: Open **Swarm Mix** from the conversation `+` header menu (or `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`) for live per-tier allocation bars, inline member token burn, session switching, and board filtering.
-- **Cross-Host CLI (`swarm-tokens`)**: Ask your agent *"Show token usage for my latest Swarm"*, or run `swarm-tokens` in your terminal:
+- **3-Layer Adaptive Capability Routing (`swarm-router`)**: Zero-token local catalog discovery (context windows, effort levels, live quota `%`) + 5D benchmark priors + passive Bayesian outcome calibration — works 100% standalone in any single host and automatically unlocks cross-vendor routing when peer CLIs are present.
+- **Native Antigravity Sidecar Panel**: Open **Swarm Mix** from the conversation `+` header menu (or `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`) for live per-tier allocation bars, inline member token burn, session switching, board filtering, and the **Models** capability/routing tab.
+- **Cross-Host CLIs (`swarm-tokens` & `swarm-router`)**: Ask your agent *"Show token usage for my latest Swarm"*, or run in your terminal:
 
 ```bash
+swarm-router --host auto -m    # 3-layer capability discovery & optimal task routing table
 swarm-tokens                   # Per-agent & per-model token ledger for the latest Swarm
 swarm-tokens --watch 3         # Live auto-refreshing dashboard while a Swarm runs
 swarm-tokens --list -n 10      # List recent multi-agent sessions across AGY / Claude / Codex

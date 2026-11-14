@@ -3,9 +3,9 @@ name: swarm-mix
 description: 跨平台多代理三级算力分流与跨模型家族强制互审规则（支持 Antigravity / Claude Code / Codex 同源安装）。每次调用多代理工具（Antigravity swarm、Claude Code Agent/Task、Codex spawn_agent）或执行跨模型代码验收前必须读取。
 ---
 
-# Swarm Mix：多端统一异构编排入口 (`swarm-mix` v2.2)
+# Swarm Mix：多端统一异构编排入口 (`swarm-mix` v2.3)
 
-本技能将「**L1 旗舰攻坚 / L2 均衡编码 / L3 轻量检索**」三级算力分流、「**跨模型家族强制互审（默认 Medium，并发/架构/安全高危升 High）**」与「**多端分模型 Token 消耗审计 (`swarm-tokens`)**」统一封装为单包多宿主规范。简单问答与单点明确小改由主会话直接完成（子代理数 = 0）；用户单次对话口头指定的模型要求始终高于本规则。
+本技能将「**3 层动态模型能力画像与自适应路由 (`model_router.py`)**」、「**L1 旗舰攻坚 / L2 均衡编码 / L3 轻量检索**」三级分流、「**跨模型家族强制互审（默认 Medium，并发/架构/安全高危升 High）**」与「**多端分模型 Token 消耗审计 (`swarm-tokens`)**」统一封装为单包多宿主规范。各宿主（Antigravity / Claude Code / Codex）**均支持 100% 独立零依赖运行**，同时在检测到本机其它厂商 CLI 时自动解锁跨厂专长调度。简单问答与单点明确小改由主会话直接完成（子代理数 = 0）；用户单次对话口头指定的模型要求始终高于本规则。
 
 ## 按当前宿主环境按需读取唯一对应细则（禁止全读）
 
@@ -17,6 +17,16 @@ description: 跨平台多代理三级算力分流与跨模型家族强制互审�
    → 读取同目录下的 [references/claude-code.md](references/claude-code.md)
 3. **Codex 环境**（当前工具列表含 `spawn_agent` / `start_delegated_task` 或处于 OpenAI Codex 会话）：
    → 读取同目录下的 [references/codex.md](references/codex.md)
+
+## 动态能力探测与自适应路由 (`model_router.py` / `swarm-router`)
+
+派发多代理任务前，可运行零依赖脚本 [scripts/model_router.py](scripts/model_router.py)（安装后注册为 `swarm-router`），融合 **L1 本地硬目录与实时配额 + L2 五维基准画像 (`data/model_priors.json`) + L3 历史通过率贝叶斯校准** 自动输出最优派单表（未安装其它厂商 CLI 时静默回退至当前宿主原生模型池，零报错）：
+
+```bash
+python3 "<本SKILL所在目录>/scripts/model_router.py" --host auto -m       # 输出当前宿主各子任务最优模型与跨厂兜底表
+python3 "<本SKILL所在目录>/scripts/model_router.py" record \
+  --author-model "<编码模型>" --first-pass --verifier-model "<审查模型>" --clean-pass  # 记录验收结果驱动 L3 自校准
+```
 
 ## Token 消耗审计与实时盯盘 (`swarm-tokens`)
 

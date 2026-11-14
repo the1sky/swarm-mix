@@ -70,10 +70,12 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 
 ## Token 消耗审计（`Swarm Mix` 侧边栏面板 & `swarm-tokens`）
 
-- **Antigravity 原生侧边栏**：点击对话右上角 `+` 菜单选择 **Swarm Mix**（或对话内按钮 `sidecar://swarm-mix/swarm_board/`），实时查看四档模型算力色带、各成员内联消耗条、跨会话大盘切换与看板检索。
-- **跨端命令行（`swarm-tokens`）**：直接对 Agent 说「查看最近一次 Swarm 的 token 消耗」，或在终端运行：
+- **3 层动态能力路由（`swarm-router`）**：零 Token 探测本机硬目录与实时配额（L1）+ 五维基准能力卡与未知新模型自动继承（L2）+ 历史看板通过率贝叶斯自校准（L3）；单装任意一端 100% 独立零依赖运行，多厂共存时自动按专长跨厂调度。
+- **Antigravity 原生侧边栏**：点击对话右上角 `+` 菜单选择 **Swarm Mix**（或对话内按钮 `sidecar://swarm-mix/swarm_board/`），实时查看四档模型算力色带、各成员内联消耗条、跨会话大盘切换、看板检索与 **Models** 能力路由面板。
+- **跨端命令行（`swarm-tokens` & `swarm-router`）**：直接对 Agent 说「查看最近一次 Swarm 的 token 消耗」，或在终端运行：
 
 ```bash
+swarm-router --host auto -m    # 查看当前宿主 3 层能力画像与各子任务最优派单表
 swarm-tokens                   # 查看最近一次 Swarm / 多代理会话的分成员与分模型账单
 swarm-tokens --watch 3         # 每 3 秒实时刷新运行中 Swarm 的消耗与缓存命中率
 swarm-tokens --list -n 10      # 列出跨 Antigravity / Claude Code / Codex 的近期会话
