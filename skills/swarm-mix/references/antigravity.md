@@ -2,13 +2,14 @@
 
 本规则代表用户的全局常驻显式授权，**覆盖内置 `swarm` 技能中“未获要求时全员继承主模型（包括 `narrator` 与 `monitor`）”的默认限制**。
 
-## 1. 启动前配额预检与跨桶兜底原则
-首次调用 `swarm(action="add")` 前，先调用一次 `swarm(action="models")` 检查实时 `quota_remaining` 与 `quota_note`（**Gemini 全系共享同一配额桶，Claude 全系与 GPT-OSS 共享另一独立配额桶**）：
+## 1. 启动前配额预检、Codex 可选探测与跨桶兜底
+首次调用 `swarm(action="add")` 前，并行执行一次 `swarm(action="models")` 与本机 Codex 可选探测 `python3 "<本SKILL所在目录>/scripts/codex_bridge.py" --probe`（**Gemini 全系共享同一配额桶，Claude 全系与 GPT-OSS 共享另一独立配额桶；本机 Codex 订阅为可选第三算力池**）：
+- **未安装或未登录 Codex（`available: false`）**：**静默跳过所有 GPT 桥接分支**，100% 按下方 Antigravity 原生 Gemini / Claude 双池规则运行，严禁报错或阻塞流程。
 - **账号模型池自适应**：若 `models` 返回列表中不含某指定 ID（如尚未灰度 `gemini-4-hydrogen-medium`），自动映射至列表内同家族同梯队的可用型号（如 `gemini-3.8-flash-medium`），严禁传入未列出的模型 ID。
 - **AI Credits 兜底**：若 `quota_note` 显示已由 AI Credits 接管计费，原定模型可继续正常使用。
-- **低水位节流（`<15%` 告警但未归零）**：同桶内降档（`Carbon` → `Argon`/`Hydrogen`；`Opus` → `Sonnet`）。
+- **低水位节流（`<15%` 告警但未归零）**：同桶内降档（`Carbon` → `Argon`/`Hydrogen`；`Opus` → `Sonnet`）；若 Claude 桶 `<15%` 且 `codex_bridge.py --probe` 返回 `available: true`，跨家族 `verifier` 优先改走下方 **GPT 桥接模式**以节省 Claude 余量。
 - **配额归零（`0%` 且无 AI Credits）**：同家族模型会同步归零，必须**跨配额桶切换**并向用户一行说明：
-  - **Claude 桶归零** → `verifier` / Claude 节点跨桶回退至 `gemini-4-carbon-medium`（审查/攻坚）或 `gemini-4-argon-high`（常规编码）；
+  - **Claude 桶归零** → 若 `available: true` 优先由 GPT 桥接接管 `verifier`；否则跨桶回退至 `gemini-4-carbon-medium`（审查/攻坚）或 `gemini-4-argon-high`（常规编码）；
   - **Gemini 桶归零** → 核心/编码节点跨桶回退至 `claude-opus-5-5-medium` / `claude-sonnet-5-5-high`，L3 轻量节点回退至 `claude-sonnet-5-5-low` 或 `gpt-oss-120b-medium`（若主控自身同属归零桶，恢复时同步调用 `swarm(action="model", model="...")` 切换主控自身）。
 
 ## 2. 角色三级算力分流与跨家族互审
@@ -24,10 +25,16 @@
 - **Cross-Verify 独立审查与验收（`verifier`）——强制跨家族异构（默认 `Medium`，高危升 `High`）**
   - **职责**：Diff 审查、边界找茬、测试运行与验收（只报问题不直接改代码）。
   - **默认日常审查（`Medium`）**：必须与被审 Author **跨模型家族绑定**以消除同源思维盲区：
-    - 被审 Author 为 Gemini 系 → `verifier` 默认绑定 `claude-opus-5-5-medium`（低水位节流降 `claude-sonnet-5-5-high`；Claude 桶 `0%` 时跨桶退回 `gemini-4-carbon-medium`）；
-    - 被审 Author 为 Claude 系 → `verifier` 默认绑定 `gemini-4-carbon-medium`（低水位节流降 `gemini-4-argon-high`；Gemini 桶 `0%` 时跨桶退回 `claude-opus-5-5-medium`）；
-    - 混合多家族 Author 时 → 优先绑定与多数 Author 异构的旗舰模型（默认 `claude-opus-5-5-medium`）。
-  - **高危场景按需升 `High`**：仅当任务涉及**并发/异步竞态与状态机、跨模块核心架构契约变更、安全鉴权与边界审计**（或常规修复两轮仍未定位深层根因）时，升至 `claude-opus-5-5-high` / `gemini-4-carbon-high`（支持运行中在 `waiting` 状态下热升档）。
+    - 被审 Author 为 Gemini 系 → `verifier` 默认绑定 `claude-opus-5-5-medium`（Claude 桶 `<15%` 时：若本机 Codex `available: true` 优先改用 `gemini-4-hydrogen-medium` 薄壳 + `codex_bridge.py --mode review` 调度 GPT 审查，否则降档 `claude-sonnet-5-5-high`；`0%` 且无 Codex 时跨桶退回 `gemini-4-carbon-medium`）；
+    - 被审 Author 为 Claude 系 → `verifier` 默认绑定 `gemini-4-carbon-medium`（低水位节流降 `gemini-4-argon-high`；Gemini 桶 `0%` 时优先走 Codex 桥接或跨桶退回 `claude-opus-5-5-medium`）；
+    - 混合多家族 Author 时 → 优先绑定与多数 Author 异构的旗舰模型（或本机已就绪的 Codex GPT 第三家族实现三方交叉验收）。
+  - **高危场景按需升 `High`**：仅当任务涉及**并发/异步竞态与状态机、跨模块核心架构契约变更、安全鉴权与边界审计**（或常规修复两轮仍未定位深层根因）时，升至 `claude-opus-5-5-high` / `gemini-4-carbon-high` / `--effort high`（支持运行中在 `waiting` 状态下热升档）。
+- **GPT / Codex 薄壳桥接节点（仅当 `codex_bridge.py --probe` 返回 `available: true` 时启用）**
+  - **适用场景**：用户点名使用 GPT / Codex 参与编码或审查，或 Claude 桶 `<15%` 时接管跨家族 `verifier`。
+  - **执行方式**：成员绑定 L3 `gemini-4-hydrogen-medium` 作为看板收发薄壳，在 `brief` 中写明通过 `run_command` 调用：
+    - 只读审查：`python3 "<本SKILL所在目录>/scripts/codex_bridge.py" --mode review --cwd "<工作目录>" --effort <medium|high> "<审查重点>"`
+    - 编码修改：`python3 "<本SKILL所在目录>/scripts/codex_bridge.py" --mode exec --sandbox workspace-write --cwd "<工作目录>" --effort <medium|high> "<编码任务>"`
+  - **无损降级兜底**：若命令输出含 `[CODEX_BRIDGE_UNAVAILABLE]`，薄壳节点不得用 Hydrogen 自行冒充 GPT 结论，须立即发帖告知主控；主控在该成员 `waiting` 时调用 `swarm(action="model", ...)` 热切换为原生旗舰/均衡模型继续完成任务。
 - **L3 只读检索、文档同步与后台守护（Lightweight & Daemons）**
   - **职责**：只读代码/日志检索（`research`）、文档与注释更新（`docs`），以及伴生守护节点 `narrator` 与 `monitor`。
   - **模型**：统一显式绑定 `gemini-4-hydrogen-medium`（复杂长链路检索可升至 `gemini-4-hydrogen-high`；未开放 Hydrogen 时回退 `gemini-3.8-flash-medium`，Gemini 桶 `0%` 时跨桶回退 `claude-sonnet-5-5-low`）。
@@ -37,4 +44,4 @@
 - **严禁通过 `kill` + 重新 `add` 更换模型**，以免销毁对话历史与 `share`/`branch` 隔离工作区。
 
 ## 4. Swarm Token 账单与空转监控
-- 原生 Swarm 面板仅展示模型与状态；若需核查各 Worker / Subagent 的 `input_tokens`、`cache_read_tokens`、`output_tokens` 及分模型占比，运行 `../scripts/swarm_tokens.py --host agy --markdown`（或终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。
+- 原生 Swarm 面板仅展示模型与状态；启动 Swarm 或用户需要查看实时 Token 消耗时，可在回复中附上内嵌侧边栏按钮 `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`（聚合分模型算力占比、成员实时消耗条与看板消息），或运行 `../scripts/swarm_tokens.py --host agy --markdown`（终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。

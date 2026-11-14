@@ -198,6 +198,66 @@ def _sum_agy_transcript(
     return turns, in_tok, cache_tok, out_tok
 
 
+def _extract_codex_bridge_usages(
+    transcript_path: Path,
+    min_step_index: Optional[int] = None,
+    max_step_index: Optional[int] = None,
+) -> Dict[str, Tuple[int, int, int, int]]:
+    """
+    Extract bridged OpenAI Codex CLI token telemetry emitted by `codex_bridge.py`
+    (`[CODEX_BRIDGE_USAGE] {"model": ..., "turns": ..., "input_tokens": ..., ...}`)
+    inside Antigravity GENERIC tool-result steps. Returns {model: (turns, in, cache, out)}.
+    """
+    agg: Dict[str, Tuple[int, int, int, int]] = {}
+    if not transcript_path.is_file():
+        return agg
+    tag = "[CODEX_BRIDGE_USAGE] {"
+    try:
+        with transcript_path.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if "[CODEX_BRIDGE_USAGE]" not in line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(d, dict) or d.get("type") != "GENERIC":
+                    continue
+                sidx = d.get("step_index")
+                if isinstance(sidx, int):
+                    if min_step_index is not None and sidx < min_step_index:
+                        continue
+                    if max_step_index is not None and sidx > max_step_index:
+                        continue
+                content = d.get("content")
+                if not isinstance(content, str):
+                    continue
+                for raw_line in content.splitlines():
+                    s = raw_line.strip()
+                    if not (s.startswith(tag) and s.endswith("}")):
+                        continue
+                    try:
+                        payload = json.loads(s[len("[CODEX_BRIDGE_USAGE] "):])
+                    except Exception:
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    mname = payload.get("model")
+                    if not isinstance(mname, str) or not mname.strip():
+                        continue
+                    t = _safe_int(payload.get("turns"))
+                    i = _safe_int(payload.get("input_tokens"))
+                    c = _safe_int(payload.get("cache_read_tokens"))
+                    o = _safe_int(payload.get("output_tokens"))
+                    if t <= 0 and i <= 0 and o <= 0:
+                        continue
+                    prev = agg.get(mname, (0, 0, 0, 0))
+                    agg[mname] = (prev[0] + t, prev[1] + i, prev[2] + c, prev[3] + o)
+    except OSError:
+        pass
+    return agg
+
+
 def _ingest_members_json_text(content: str, members: Dict[str, Dict[str, str]]) -> Optional[str]:
     found_title: Optional[str] = None
     if '"members"' not in content:
@@ -495,6 +555,22 @@ def discover_agy_sessions(
                     agent_id=root_cid[:8],
                 )
             ]
+            for cb_model, (cb_t, cb_in, cb_cache, cb_out) in _extract_codex_bridge_usages(
+                parent_tp, min_step_index=min_coord_step, max_step_index=max_coord_step
+            ).items():
+                agents.append(
+                    AgentUsage(
+                        name="coordinator[codex]",
+                        role="codex-bridge",
+                        model=cb_model,
+                        state=coord_state,
+                        turns=cb_t,
+                        input_tokens=cb_in,
+                        cache_read_tokens=cb_cache,
+                        output_tokens=cb_out,
+                        agent_id=root_cid[:8],
+                    )
+                )
 
             for cid, agent_name, st, killed, parent_id, depth in descendants:
                 tp = brain_dir / cid / ".system_generated" / "logs" / "transcript.jsonl"
@@ -532,6 +608,20 @@ def discover_agy_sessions(
                         agent_id=cid[:8],
                     )
                 )
+                for cb_model, (cb_t, cb_in, cb_cache, cb_out) in _extract_codex_bridge_usages(tp).items():
+                    agents.append(
+                        AgentUsage(
+                            name=f"{display_name}[codex]",
+                            role="codex-bridge",
+                            model=cb_model,
+                            state=state,
+                            turns=cb_t,
+                            input_tokens=cb_in,
+                            cache_read_tokens=cb_cache,
+                            output_tokens=cb_out,
+                            agent_id=cid[:8],
+                        )
+                    )
 
             ws = ""
             if ws_raw:

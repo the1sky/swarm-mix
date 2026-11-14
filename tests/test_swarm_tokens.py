@@ -795,6 +795,124 @@ class TestSwarmTokensSuite(unittest.TestCase):
                 self.assertEqual(full.agents[0].turns, 6)
                 self.assertEqual(full.agents[0].input_tokens, 6_075_000)
 
+    def test_codex_bridge_graceful_fallback_when_codex_missing(self) -> None:
+        """When `codex` is NOT installed, codex_bridge.py exits 0 cleanly without crashing."""
+        import io
+        import contextlib
+
+        bridge_path = Path(__file__).resolve().parent.parent / "skills" / "swarm-mix" / "scripts" / "codex_bridge.py"
+        spec = importlib.util.spec_from_file_location("codex_bridge", bridge_path)
+        assert spec and spec.loader
+        cb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cb)
+
+        with mock.patch.dict(os.environ, {"SWARM_MIX_CODEX_BIN": "/nonexistent/codex-bin", "PATH": ""}, clear=False):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = cb.main(["--probe"])
+            self.assertEqual(rc, 0)
+            info = json.loads(buf.getvalue().strip())
+            self.assertFalse(info["available"])
+            self.assertEqual(info["reason"], "codex_not_installed")
+
+            buf2 = io.StringIO()
+            with contextlib.redirect_stdout(buf2):
+                rc2 = cb.main(["--mode", "review", "check diff"])
+            self.assertEqual(rc2, 0)
+            self.assertIn("[CODEX_BRIDGE_UNAVAILABLE]", buf2.getvalue())
+
+    def test_codex_bridge_execution_and_agy_token_correlation(self) -> None:
+        """Mock `codex` CLI emits --json events -> codex_bridge.py emits [CODEX_BRIDGE_USAGE] -> swarm_tokens correlates GPT usage."""
+        import io
+        import contextlib
+
+        bridge_path = Path(__file__).resolve().parent.parent / "skills" / "swarm-mix" / "scripts" / "codex_bridge.py"
+        spec = importlib.util.spec_from_file_location("codex_bridge", bridge_path)
+        assert spec and spec.loader
+        cb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cb)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            codex_home = tmp / "codex_home"
+            codex_home.mkdir()
+            (codex_home / "config.toml").write_text('model = "gpt-6-astra"\n', encoding="utf-8")
+
+            fake_bin = tmp / "fake-codex"
+            fake_bin.write_text(
+                "#!/bin/sh\n"
+                'if [ "$1" = "login" ]; then echo "Logged in using ChatGPT"; exit 0; fi\n'
+                'echo \'{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"LGTM: 0 blocking bugs"}}\'\n'
+                'echo \'{"type":"turn.completed","usage":{"input_tokens":30000,"cached_input_tokens":20000,"cache_write_input_tokens":0,"output_tokens":450}}\'\n',
+                encoding="utf-8",
+            )
+            fake_bin.chmod(0o755)
+
+            with mock.patch.dict(os.environ, {"SWARM_MIX_CODEX_BIN": str(fake_bin), "CODEX_HOME": str(codex_home)}):
+                pbuf = io.StringIO()
+                with contextlib.redirect_stdout(pbuf):
+                    cb.main(["--probe"])
+                pinfo = json.loads(pbuf.getvalue().strip())
+                self.assertTrue(pinfo["available"])
+                self.assertEqual(pinfo["model"], "gpt-6-astra")
+
+                ebuf = io.StringIO()
+                with contextlib.redirect_stdout(ebuf):
+                    rc = cb.main(["--mode", "review", "--cwd", str(tmp), "--effort", "medium", "check edge cases"])
+                self.assertEqual(rc, 0)
+                tool_stdout = ebuf.getvalue()
+                self.assertIn("LGTM: 0 blocking bugs", tool_stdout)
+                self.assertIn("[CODEX_BRIDGE_USAGE]", tool_stdout)
+
+            # Verify Antigravity transcript correlation in swarm_tokens.py
+            agy_dir = tmp / "agy"
+            brain_dir = agy_dir / "brain"
+            brain_dir.mkdir(parents=True)
+            db_path = agy_dir / "conversation_summaries.db"
+            con = sqlite3.connect(str(db_path))
+            con.execute(
+                "CREATE TABLE conversation_summaries (conversation_id TEXT, title TEXT, workspace_uris TEXT, status TEXT, parent_conversation_id TEXT, agent_name TEXT, killed INTEGER, last_modified_time INTEGER)"
+            )
+            con.execute("INSERT INTO conversation_summaries VALUES ('root-cb', 'GPT Swarm', '', 'done', '', '', 0, 100)")
+            con.execute("INSERT INTO conversation_summaries VALUES ('w-cb', 'verifier', '', 'done', 'root-cb', 'verifier', 1, 101)")
+            con.commit()
+            con.close()
+
+            p_tp = brain_dir / "root-cb" / ".system_generated" / "logs" / "transcript.jsonl"
+            p_tp.parent.mkdir(parents=True)
+            p_tp.write_text(
+                json.dumps({
+                    "step_index": 1,
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 12000,
+                    "output_tokens": 600,
+                    "tool_calls": [{"name": "swarm", "args": {"action": '"add"', "name": '"verifier"', "model": '"gemini-4-hydrogen-medium"'}}],
+                })
+                + "\n",
+                encoding="utf-8",
+            )
+            w_tp = brain_dir / "w-cb" / ".system_generated" / "logs" / "transcript.jsonl"
+            w_tp.parent.mkdir(parents=True)
+            w_tp.write_text(
+                "\n".join([
+                    json.dumps({"step_index": 1, "type": "PLANNER_RESPONSE", "input_tokens": 4000, "output_tokens": 200}),
+                    json.dumps({"step_index": 2, "type": "GENERIC", "content": tool_stdout}),
+                ])
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"ANTIGRAVITY_DATA_DIR": str(agy_dir)}):
+                rep = st.collect_sessions(host="agy", target_id="root-cb")[0]
+                by_name = {a.name: a for a in rep.agents}
+                self.assertIn("verifier", by_name)
+                self.assertIn("verifier[codex]", by_name)
+                self.assertEqual(by_name["verifier"].model, "gemini-4-hydrogen-medium")
+                self.assertEqual(by_name["verifier[codex]"].model, "gpt-6-astra (medium)")
+                self.assertEqual(by_name["verifier[codex]"].input_tokens, 10000)  # 30000 - 20000 cached
+                self.assertEqual(by_name["verifier[codex]"].cache_read_tokens, 20000)
+                self.assertEqual(by_name["verifier[codex]"].output_tokens, 450)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -65,12 +65,13 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 | :--- | :--- | :--- | :--- |
 | **L1 核心攻坚** | 继承主会话模型 *(轻量主会话升 `Carbon High`)* | 主会话模型 / `Opus (High)` | 主会话默认主模型（`High`） |
 | **L2 常规编码** | `Gemini 4 Argon (High)` / `Claude Sonnet 5.5 (High)` | `std-author` → `Sonnet (High)` | `std-author`（`Medium`） |
-| **跨家族互审** | Gemini ↔ `Opus 5.5` / `Carbon` *(日常 `Medium`，高危 `High`)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`，回退 `sonnet`)* |
+| **跨家族互审** | Gemini ↔ `Opus 5.5` / `Carbon` *(支持可选本机 `Codex` GPT 桥接)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`，回退 `sonnet`)* |
 | **L3 轻量与守护** | `Gemini 4 Hydrogen (Medium)` *(含 `narrator` / `monitor`)* | `fast-scout` → `Haiku (Medium)` | `fast-scout`（`Low`） |
 
-## Token 消耗审计 (`swarm-tokens`)
+## Token 消耗审计（`Swarm Mix` 侧边栏面板 & `swarm-tokens`）
 
-直接对 Agent 说「查看最近一次 Swarm 的 token 消耗」，或在终端运行安装脚本自动注入的 `swarm-tokens`：
+- **Antigravity 原生侧边栏**：点击对话右上角 `+` 菜单选择 **Swarm Mix**（或对话内按钮 `sidecar://swarm-mix/swarm_board/`），实时查看四档模型算力色带、各成员内联消耗条、跨会话大盘切换与看板检索。
+- **跨端命令行（`swarm-tokens`）**：直接对 Agent 说「查看最近一次 Swarm 的 token 消耗」，或在终端运行：
 
 ```bash
 swarm-tokens                   # 查看最近一次 Swarm / 多代理会话的分成员与分模型账单

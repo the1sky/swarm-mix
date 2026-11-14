@@ -75,7 +75,7 @@ if [ -d "$HOME/.codex" ] || command -v codex >/dev/null 2>&1; then
 fi
 
 # 4. CLI Token Inspector (~/.local/bin/swarm-tokens)
-chmod +x "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py"
+chmod +x "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$SRC_DIR/skills/swarm-mix/scripts/codex_bridge.py"
 mkdir -p "$HOME/.local/bin"
 if [ "$MODE" = "link" ]; then
   ln -sf "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"

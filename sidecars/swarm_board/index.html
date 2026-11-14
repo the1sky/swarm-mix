@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="frame-src 'none'; child-src 'none'">
+  <title>Swarm Mix</title>
+  <script src="/preload.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@8..144,400..700&family=Google+Sans+Code:wght@400..600&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="top-header">
+      <div class="title-row">
+        <div class="brand-cluster">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <h1 id="swarm-title" class="swarm-title">Swarm Mix</h1>
+        </div>
+        <span id="live-pill" class="live-pill" role="status" title="Polls local Swarm & transcript state automatically">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="live-label">Live</span>
+        </span>
+      </div>
+
+      <div class="session-bar">
+        <label class="select-wrap" title="Switch between active conversation Swarm and recent multi-agent sessions">
+          <span class="sr-only">Target Swarm or multi-agent session</span>
+          <select id="session-select" class="session-select">
+            <option value="auto">Current Conversation (Auto)</option>
+          </select>
+        </label>
+        <button type="button" id="scope-btn" class="chip-btn" aria-pressed="false" title="Toggle between Swarm window turns only vs full parent conversation history">
+          Swarm Window
+        </button>
+      </div>
+
+      <div id="meta-line" class="meta-line">Resolving Swarm telemetry…</div>
+
+      <div role="tablist" aria-label="Swarm Mix views" class="tablist" id="tablist">
+        <button type="button" role="tab" id="tab-tokens" data-tab="tokens" aria-selected="true" tabindex="0" class="tab-btn">
+          <span>Tokens</span>
+          <span id="badge-tokens" class="tab-pill">—</span>
+        </button>
+        <button type="button" role="tab" id="tab-members" data-tab="members" aria-selected="false" tabindex="-1" class="tab-btn">
+          <span>Members</span>
+          <span id="badge-members" class="tab-pill">0</span>
+        </button>
+        <button type="button" role="tab" id="tab-board" data-tab="board" aria-selected="false" tabindex="-1" class="tab-btn">
+          <span>Board</span>
+          <span id="badge-board" class="tab-pill">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="panels-grid">
+      <!-- Panel 1: Tokens & Tier Allocation -->
+      <section role="tabpanel" id="panel-tokens" aria-labelledby="tab-tokens" tabindex="0">
+        <div class="panel-inner">
+          <div id="fallback-banner" class="info-banner" hidden></div>
+          <div id="anomalies-box" class="anomalies-box" hidden></div>
+
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-label">New Input</span>
+              <strong id="kpi-input" class="kpi-val">—</strong>
+              <span id="kpi-input-sub" class="kpi-sub">Uncached prompt</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Cache Read</span>
+              <div class="kpi-inline">
+                <strong id="kpi-cache" class="kpi-val">—</strong>
+                <span id="kpi-cache-pct" class="hit-badge">0%</span>
+              </div>
+              <span class="kpi-sub">Prefix reuse</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Output</span>
+              <strong id="kpi-output" class="kpi-val">—</strong>
+              <span id="kpi-output-sub" class="kpi-sub">Completion + think</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Scale</span>
+              <strong id="kpi-turns" class="kpi-val">—</strong>
+              <span id="kpi-agents-sub" class="kpi-sub">0 agents</span>
+            </div>
+          </div>
+
+          <div class="allocation-card">
+            <div class="section-head">
+              <h2 class="section-title">Model Tier Allocation</h2>
+              <div class="seg-mini" role="group" aria-label="Allocation metric">
+                <button type="button" id="bar-mode-in" class="seg-btn" aria-pressed="true">Input %</button>
+                <button type="button" id="bar-mode-out" class="seg-btn" aria-pressed="false">Output %</button>
+              </div>
+            </div>
+            <div id="tier-stack-bar" class="stack-bar" role="img" aria-label="Token share by model tier"></div>
+            <div id="tier-legend" class="tier-legend"></div>
+          </div>
+
+          <div class="section-head">
+            <h2 class="section-title">Ledger by Model Tier</h2>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="tier-table-caption" class="table-wrapper">
+            <table class="tier-table">
+              <caption id="tier-table-caption" class="sr-only">Token usage breakdown by model tier</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Model</th>
+                  <th scope="col" class="num">Nodes</th>
+                  <th scope="col" class="num">Turns</th>
+                  <th scope="col" class="num">Input</th>
+                  <th scope="col" class="num">Cache</th>
+                  <th scope="col" class="num">Output</th>
+                  <th scope="col" class="num">Share</th>
+                </tr>
+              </thead>
+              <tbody id="tier-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: Enhanced Members Roster + Inline Token Burn -->
+      <section role="tabpanel" id="panel-members" aria-labelledby="tab-members" hidden="until-found">
+        <div class="panel-inner">
+          <div class="roster-toolbar">
+            <div class="seg-mini" role="group" aria-label="Sort members">
+              <button type="button" id="sort-burn" class="seg-btn" aria-pressed="true">Burn ↓</button>
+              <button type="button" id="sort-status" class="seg-btn" aria-pressed="false">Status</button>
+            </div>
+            <span class="spacer"></span>
+            <label class="toggle-label">
+              <input type="checkbox" id="show-killed" checked>
+              <span id="show-killed-text">Show killed</span>
+            </label>
+          </div>
+          <div id="members-list" class="members-list" role="list"></div>
+        </div>
+      </section>
+
+      <!-- Panel 3: Live Board Feed -->
+      <section role="tabpanel" id="panel-board" aria-labelledby="tab-board" hidden="until-found">
+        <div class="panel-inner">
+          <div class="roster-toolbar">
+            <input type="search" id="board-search" class="search-input" placeholder="Filter messages or @agent…" aria-label="Filter board messages">
+            <select id="board-author" class="author-select" aria-label="Filter by sender">
+              <option value="">All senders</option>
+            </select>
+            <label class="toggle-label" title="Auto-scroll to latest post">
+              <input type="checkbox" id="board-follow" checked>
+              <span>Follow</span>
+            </label>
+          </div>
+          <div id="board-feed" class="board-feed" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+
+    <section id="empty-state" class="empty-state" hidden>
+      <div class="empty-box">
+        <p class="empty-title">No Swarm or multi-agent session found</p>
+        <p class="empty-sub">Launch a Swarm in chat (`swarm-mix` automatically routes L1 / L2 / L3 & cross-family verifiers) and live token telemetry will appear here.</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
