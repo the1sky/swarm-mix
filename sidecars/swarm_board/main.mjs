@@ -161,13 +161,92 @@ function classifyTier(model, role, name) {
   const m = String(model || '').toLowerCase().replace(/\*$/, '');
   const r = String(role || '').toLowerCase();
   const n = String(name || '').toLowerCase();
-  if (n.includes('verifier') || r.includes('verifier')) return 'verify';
-  if (/(?:^|[-_\s])(hydrogen|flash|mini|nano|haiku|lite|low)(?:$|[-_\s\d)])/.test(m)) {
+  if (/(verifier|audit|review)/.test(n) || /(verifier|audit|review)/.test(r)) return 'verify';
+  if (/(?:^|[-_\s])(hydrogen|flash|mini|nano|haiku|lite|luna)(?:$|[-_\s\d(])/.test(m) || /sonnet[-_]5[-_]5[-_]low/.test(m)) {
     return 'l3';
   }
-  if (/(?:^|[-_\s])(argon|sonnet|luna)(?:$|[-_\s\d)])/.test(m)) return 'l2';
-  if (/(?:^|[-_\s])(carbon|opus|pro|astra|o3)(?:$|[-_\s\d)])/.test(m) || /^gpt-[56](?!.*-mini)/.test(m)) return 'l1';
+  if (/(?:^|[-_\s])(argon|sonnet|sol)(?:$|[-_\s\d(])/.test(m)) return 'l2';
+  if (/(?:^|[-_\s])(carbon|opus|pro|astra|o3)(?:$|[-_\s\d(])/.test(m) || /^gpt-[56](?!.*(?:mini|nano|luna|sol))/.test(m)) return 'l1';
   return 'l2';
+}
+
+let codexDefaultsCache = { at: 0, primary: 'gpt-6-astra', lightweight: 'gpt-6-luna' };
+function getCodexDefaults() {
+  const now = Date.now();
+  if (now - codexDefaultsCache.at < 30_000) return codexDefaultsCache;
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
+  let primary = 'gpt-6-astra';
+  let lightweight = 'gpt-6-luna';
+  try {
+    const cfg = readFileSync(join(codexHome, 'config.toml'), 'utf-8');
+    for (const raw of cfg.split('\n')) {
+      const s = raw.trim();
+      if (s.startsWith('[')) break;
+      const m = s.match(/^model\s*=\s*"([^"]+)"/);
+      if (m?.[1]) {
+        primary = m[1].trim();
+        break;
+      }
+    }
+  } catch {
+    // ignore missing config.toml
+  }
+  try {
+    const cat = JSON.parse(readFileSync(join(codexHome, 'native-router-models.json'), 'utf-8'));
+    for (const it of cat?.models || []) {
+      const slug = String(it?.slug || '').trim();
+      if (!slug || slug.includes('/') || it?.visibility === 'hide') continue;
+      if (/(luna|mini|nano|flash)/i.test(slug)) {
+        lightweight = slug;
+        break;
+      }
+    }
+  } catch {
+    // ignore missing catalog
+  }
+  codexDefaultsCache = { at: now, primary, lightweight };
+  return codexDefaultsCache;
+}
+
+function inferBridgeModelFromText(text) {
+  if (!text || !text.includes('codex_bridge.py') || text.includes('--probe')) return '';
+  const mFlag = text.match(/(?:--model|-m)\s+["']?([a-zA-Z0-9._/-]+)["']?/);
+  const eFlag = text.match(/--effort\s+["']?(low|medium|high|xhigh)["']?/);
+  const rFlag = text.match(/--role\s+["']?(auto|review|author|scout|monitor)["']?/);
+  const explicitModel = mFlag?.[1] && !mFlag[1].startsWith('<') ? mFlag[1] : '';
+  const effort = eFlag?.[1] || 'medium';
+  const role = rFlag?.[1] || 'auto';
+  const defs = getCodexDefaults();
+  if ((role === 'scout' || role === 'monitor') && !explicitModel) {
+    return `${defs.lightweight} (low)`;
+  }
+  return `${explicitModel || defs.primary} (${effort})`;
+}
+
+const TASK_LOG_RE = /(task-\d+\.log)\b/g;
+function parseCodexUsageLines(text) {
+  const out = [];
+  if (!text || !text.includes('[CODEX_BRIDGE_USAGE]')) return out;
+  for (const rawLine of text.split('\n')) {
+    const s = rawLine.trim();
+    if (s.startsWith('[CODEX_BRIDGE_USAGE] {') && s.endsWith('}')) {
+      try {
+        const cb = JSON.parse(s.slice('[CODEX_BRIDGE_USAGE] '.length));
+        if (cb && typeof cb === 'object' && typeof cb.model === 'string' && cb.model.trim()) {
+          const t = safeInt(cb.turns);
+          const i = safeInt(cb.input_tokens);
+          const c = safeInt(cb.cache_read_tokens);
+          const o = safeInt(cb.output_tokens);
+          if (t > 0 || i > 0 || o > 0) {
+            out.push({ model: cb.model.trim(), turns: t, inTok: i, cacheTok: c, outTok: o });
+          }
+        }
+      } catch {
+        // ignore malformed telemetry
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +266,9 @@ function parseTranscriptFile(filePath) {
     const subagentModels = [];
     const subagents = [];
     const codexBridges = [];
+    const parsedTaskLogs = new Set();
+    let inFlightBridgeModel = '';
+    const tasksDir = join(dirname(dirname(filePath)), 'tasks');
 
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -257,6 +339,10 @@ function parseTranscriptFile(filePath) {
           const stype = stripQuotes(args.TypeName) || 'subagent';
           const smodel = stripQuotes(args.Model) || 'inherit';
           subagentModels.push({ stype, smodel });
+        } else if (tname === 'run_command') {
+          const cmdLine = stripQuotes(args.CommandLine);
+          const inferred = inferBridgeModelFromText(cmdLine);
+          if (inferred) inFlightBridgeModel = inferred;
         }
       }
 
@@ -264,25 +350,10 @@ function parseTranscriptFile(filePath) {
         if (d.content.includes('swarm_wait') || (tcalls.length === 0 && d.status === 'DONE' && d.content.includes('"since"'))) {
           lastWaitDone = true;
         }
-        if (d.content.includes('[CODEX_BRIDGE_USAGE]')) {
-          for (const rawLine of d.content.split('\n')) {
-            const s = rawLine.trim();
-            if (s.startsWith('[CODEX_BRIDGE_USAGE] {') && s.endsWith('}')) {
-              try {
-                const cb = JSON.parse(s.slice('[CODEX_BRIDGE_USAGE] '.length));
-                if (cb && typeof cb === 'object' && typeof cb.model === 'string' && cb.model.trim()) {
-                  const t = safeInt(cb.turns);
-                  const i = safeInt(cb.input_tokens);
-                  const c = safeInt(cb.cache_read_tokens);
-                  const o = safeInt(cb.output_tokens);
-                  if (t > 0 || i > 0 || o > 0) {
-                    codexBridges.push({ stepIdx, model: cb.model.trim(), turns: t, inTok: i, cacheTok: c, outTok: o });
-                  }
-                }
-              } catch {
-                // ignore malformed telemetry
-              }
-            }
+        const isBoardPayload = d.content.includes('"messages":[') || (d.content.includes('"head":') && d.content.includes('"seq":'));
+        if (!isBoardPayload && d.content.includes('[CODEX_BRIDGE_USAGE]')) {
+          for (const item of parseCodexUsageLines(d.content)) {
+            codexBridges.push({ stepIdx, ...item });
           }
         }
         if (d.content.includes('"conversationId"') && subagentModels.length > 0) {
@@ -305,6 +376,24 @@ function parseTranscriptFile(filePath) {
             }
           }
         }
+      } else if (dtype === 'SYSTEM_MESSAGE' && typeof d.content === 'string') {
+        const refLogs = [...d.content.matchAll(TASK_LOG_RE)].map((m) => m[1]);
+        const freshRefs = refLogs.filter((lg) => !parsedTaskLogs.has(lg));
+        if (!refLogs.length || freshRefs.length > 0) {
+          const directItems = parseCodexUsageLines(d.content);
+          if (directItems.length > 0) {
+            for (const item of directItems) codexBridges.push({ stepIdx, ...item });
+            for (const lg of refLogs) parsedTaskLogs.add(lg);
+          } else {
+            for (const lg of freshRefs) {
+              parsedTaskLogs.add(lg);
+              const taskItems = readCached(join(tasksDir, lg), (tTxt) => parseCodexUsageLines(tTxt));
+              if (taskItems?.length) {
+                for (const item of taskItems) codexBridges.push({ stepIdx, ...item });
+              }
+            }
+          }
+        }
       }
     }
 
@@ -323,25 +412,51 @@ function parseTranscriptFile(filePath) {
       inferredRunning,
       subagents,
       codexBridges,
+      parsedTaskLogs,
+      inFlightBridgeModel,
     };
   });
 }
 
-function sumCodexBridges(parsedTp, minStep = null, maxStep = null) {
+function sumCodexBridges(parsedTp, tasksDir = '', minStep = null, maxStep = null) {
   const byModel = new Map();
-  if (!parsedTp?.codexBridges?.length) return byModel;
-  for (const cb of parsedTp.codexBridges) {
-    if (cb.stepIdx !== null) {
-      if (minStep !== null && cb.stepIdx < minStep) continue;
-      if (maxStep !== null && cb.stepIdx > maxStep) continue;
-    }
+  let extraMtimeMs = 0;
+  const addItem = (cb) => {
     const prev = byModel.get(cb.model) || { turns: 0, input_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
     prev.turns += cb.turns;
     prev.input_tokens += cb.inTok;
     prev.cache_read_tokens += cb.cacheTok;
     prev.output_tokens += cb.outTok;
     byModel.set(cb.model, prev);
+  };
+
+  if (parsedTp?.codexBridges?.length) {
+    for (const cb of parsedTp.codexBridges) {
+      if (cb.stepIdx !== null) {
+        if (minStep !== null && cb.stepIdx < minStep) continue;
+        if (maxStep !== null && cb.stepIdx > maxStep) continue;
+      }
+      addItem(cb);
+    }
   }
+
+  if (minStep === null && maxStep === null && tasksDir && existsSync(tasksDir)) {
+    try {
+      const seen = parsedTp?.parsedTaskLogs || new Set();
+      for (const fname of readdirSync(tasksDir)) {
+        if (!/^task-\d+\.log$/.test(fname) || seen.has(fname)) continue;
+        const fullTaskPath = join(tasksDir, fname);
+        const entry = readCached(fullTaskPath, (tTxt, tSt) => ({ mtimeMs: tSt.mtimeMs, items: parseCodexUsageLines(tTxt) }));
+        if (entry?.items?.length) {
+          extraMtimeMs = Math.max(extraMtimeMs, entry.mtimeMs || 0);
+          for (const item of entry.items) addItem(item);
+        }
+      }
+    } catch {
+      // ignore transient task log race
+    }
+  }
+  byModel._extraMtimeMs = extraMtimeMs;
   return byModel;
 }
 
@@ -508,6 +623,17 @@ function buildAgySwarmSnapshot(appData, swarmCid, meName, fullSession) {
   const seenCids = new Set();
   const agents = [];
 
+  // Detect worker briefs on board that assign codex_bridge.py from second zero
+  const briefBridgeByAgent = new Map();
+  for (const m of board.messages) {
+    if (m.agent !== 'coordinator' || !m.text?.includes('codex_bridge.py')) continue;
+    const lead = m.text.trimStart().match(/^@([a-zA-Z0-9][a-zA-Z0-9_-]*)\b/);
+    if (lead?.[1] && !/^(monitor|narrator)(?:-\d+)?$/.test(lead[1])) {
+      const bm = inferBridgeModelFromText(m.text);
+      if (bm && !briefBridgeByAgent.has(lead[1])) briefBridgeByAgent.set(lead[1], bm);
+    }
+  }
+
   let coordModel = '-';
   for (const [mName, mInfo] of memberEntries) {
     if (!mInfo || typeof mInfo !== 'object') continue;
@@ -518,12 +644,13 @@ function buildAgySwarmSnapshot(appData, swarmCid, meName, fullSession) {
     if (isCoord && model !== '-') coordModel = model;
 
     const tpPath = cid ? join(appData, 'brain', cid, '.system_generated', 'logs', 'transcript.jsonl') : '';
+    const tasksDir = cid ? join(appData, 'brain', cid, '.system_generated', 'tasks') : '';
     const tp = isCoord ? parentTp : (tpPath ? parseTranscriptFile(tpPath) : null);
     if (tp?.mtimeMs) latestMtime = Math.max(latestMtime, tp.mtimeMs);
 
     const sums = isCoord ? sumSteps(tp, minCoordStep, maxCoordStep) : sumSteps(tp);
-    const totCtx = sums.input_tokens + sums.cache_read_tokens;
-    const cachePct = totCtx > 0 ? (sums.cache_read_tokens * 100) / totCtx : 0;
+    const bridged = isCoord ? sumCodexBridges(tp, '', minCoordStep, maxCoordStep) : sumCodexBridges(tp, tasksDir);
+    if (bridged._extraMtimeMs) latestMtime = Math.max(latestMtime, bridged._extraMtimeMs);
 
     let state = 'waiting';
     if (mInfo.killed || mInfo.phase === 'KILLED') {
@@ -544,51 +671,90 @@ function buildAgySwarmSnapshot(appData, swarmCid, meName, fullSession) {
     const lp = lastPostByAgent.get(mName);
     const role = isCoord ? 'coordinator' : (/^(narrator|monitor)(?:-\d+)?$/.test(mName) ? mName.split('-')[0] : String(mInfo.role || 'worker'));
 
+    let cbTurns = 0;
+    let cbIn = 0;
+    let cbCache = 0;
+    let cbOut = 0;
+    let primaryCbModel = '';
+    let primaryCbWeight = -1;
+    const modelSlices = [];
+    if (sums.turns > 0 || sums.input_tokens > 0 || sums.output_tokens > 0) {
+      modelSlices.push({
+        model,
+        tier: classifyTier(model, isCoord ? role : 'shell', isCoord ? mName : 'shell'),
+        turns: sums.turns,
+        input_tokens: sums.input_tokens,
+        cache_read_tokens: sums.cache_read_tokens,
+        output_tokens: sums.output_tokens,
+      });
+    }
+    for (const [cbModel, cbSums] of bridged.entries()) {
+      cbTurns += cbSums.turns;
+      cbIn += cbSums.input_tokens;
+      cbCache += cbSums.cache_read_tokens;
+      cbOut += cbSums.output_tokens;
+      const w = cbSums.input_tokens + cbSums.output_tokens;
+      if (w > primaryCbWeight) {
+        primaryCbWeight = w;
+        primaryCbModel = cbModel;
+      }
+      modelSlices.push({
+        model: cbModel,
+        tier: classifyTier(cbModel, role, mName),
+        turns: cbSums.turns,
+        input_tokens: cbSums.input_tokens,
+        cache_read_tokens: cbSums.cache_read_tokens,
+        output_tokens: cbSums.output_tokens,
+      });
+    }
+
+    const fallbackBridgeModel =
+      !isCoord && !primaryCbModel && role !== 'monitor' && role !== 'narrator'
+        ? (tp?.inFlightBridgeModel || briefBridgeByAgent.get(mName) || '')
+        : '';
+    const effectiveBridgeModel = primaryCbModel || fallbackBridgeModel;
+    const promoteToCodex = !isCoord && Boolean(effectiveBridgeModel);
+
+    const cardModel = promoteToCodex ? effectiveBridgeModel : model;
+    const shellModel = promoteToCodex ? model : '';
+    const combTurns = sums.turns + cbTurns;
+    const combIn = sums.input_tokens + cbIn;
+    const combCache = sums.cache_read_tokens + cbCache;
+    const combOut = sums.output_tokens + cbOut;
+    const combCtx = combIn + combCache;
+    const combPct = combCtx > 0 ? (combCache * 100) / combCtx : 0;
+
     agents.push({
       name: mName,
       role,
-      model,
-      tier: classifyTier(model, role, mName),
+      model: cardModel,
+      shell_model: shellModel,
+      tier: classifyTier(cardModel, role, mName),
       state,
-      turns: sums.turns,
-      input_tokens: sums.input_tokens,
-      cache_read_tokens: sums.cache_read_tokens,
-      output_tokens: sums.output_tokens,
-      cache_hit_pct: Math.round(cachePct * 10) / 10,
+      turns: combTurns,
+      input_tokens: combIn,
+      cache_read_tokens: combCache,
+      output_tokens: combOut,
+      cache_hit_pct: Math.round(combPct * 10) / 10,
       conversation_id: cid,
       posts: postCounts.get(mName) || 0,
       unread,
       last_post_seq: lp?.seq || 0,
       last_post_time: lp?.time || '',
-      activity: state === 'working' ? (tp?.latestActivity || 'Thinking…') : '',
+      activity: state === 'working' ? (tp?.latestActivity || (promoteToCodex ? 'Running Codex…' : 'Thinking…')) : '',
       inherited: false,
+      bridge_detail:
+        promoteToCodex || cbTurns > 0
+          ? {
+              codex_turns: cbTurns,
+              codex_input: cbIn,
+              codex_output: cbOut,
+              shell_turns: sums.turns,
+              shell_input: sums.input_tokens,
+            }
+          : null,
+      model_slices: modelSlices.length > 0 ? modelSlices : null,
     });
-
-    const bridged = isCoord ? sumCodexBridges(tp, minCoordStep, maxCoordStep) : sumCodexBridges(tp);
-    for (const [cbModel, cbSums] of bridged.entries()) {
-      const cbCtx = cbSums.input_tokens + cbSums.cache_read_tokens;
-      const cbPct = cbCtx > 0 ? (cbSums.cache_read_tokens * 100) / cbCtx : 0;
-      const cbName = `${mName}[codex]`;
-      agents.push({
-        name: cbName,
-        role: 'codex-bridge',
-        model: cbModel,
-        tier: classifyTier(cbModel, role, cbName),
-        state,
-        turns: cbSums.turns,
-        input_tokens: cbSums.input_tokens,
-        cache_read_tokens: cbSums.cache_read_tokens,
-        output_tokens: cbSums.output_tokens,
-        cache_hit_pct: Math.round(cbPct * 10) / 10,
-        conversation_id: cid,
-        posts: 0,
-        unread: 0,
-        last_post_seq: 0,
-        last_post_time: '',
-        activity: '',
-        inherited: false,
-      });
-    }
   }
 
   // Include direct non-Swarm subagents spawned in the same parent session
@@ -670,35 +836,38 @@ function formatUnifiedPayload({ host, sessionId, title, me, updatedAtMs, fullSes
   const totalCtx = totalInput + totalCache;
   const cacheHitPct = totalCtx > 0 ? Math.round((totalCache * 1000) / totalCtx) / 10 : 0;
 
-  // Rollup by clean model name
+  // Rollup by clean model name (respecting split model_slices on bridged workers)
   const modelMap = new Map();
   const safeTotIn = Math.max(1, totalInput);
   const safeTotOut = Math.max(1, totalOutput);
   for (const a of agents) {
-    if (a.turns === 0 && a.input_tokens === 0 && a.output_tokens === 0) continue;
-    const cleanModel = String(a.model || '-').replace(/\*$/, '');
-    let b = modelMap.get(cleanModel);
-    if (!b) {
-      b = {
-        model: cleanModel,
-        tier: a.tier === 'verify' ? 'verify' : classifyTier(cleanModel, '', ''),
-        _allVerify: a.tier === 'verify',
-        agents: 0,
-        turns: 0,
-        input_tokens: 0,
-        cache_read_tokens: 0,
-        output_tokens: 0,
-      };
-      modelMap.set(cleanModel, b);
-    } else if (a.tier !== 'verify' && b._allVerify) {
-      b._allVerify = false;
-      b.tier = classifyTier(cleanModel, '', '');
+    const slices = Array.isArray(a.model_slices) && a.model_slices.length > 0 ? a.model_slices : [a];
+    for (const sl of slices) {
+      if (sl.turns === 0 && sl.input_tokens === 0 && sl.output_tokens === 0) continue;
+      const cleanModel = String(sl.model || '-').replace(/\*$/, '');
+      let b = modelMap.get(cleanModel);
+      if (!b) {
+        b = {
+          model: cleanModel,
+          tier: sl.tier === 'verify' ? 'verify' : classifyTier(cleanModel, '', ''),
+          _allVerify: sl.tier === 'verify',
+          agents: 0,
+          turns: 0,
+          input_tokens: 0,
+          cache_read_tokens: 0,
+          output_tokens: 0,
+        };
+        modelMap.set(cleanModel, b);
+      } else if (sl.tier !== 'verify' && b._allVerify) {
+        b._allVerify = false;
+        b.tier = classifyTier(cleanModel, '', '');
+      }
+      b.agents += 1;
+      b.turns += sl.turns;
+      b.input_tokens += sl.input_tokens;
+      b.cache_read_tokens += sl.cache_read_tokens;
+      b.output_tokens += sl.output_tokens;
     }
-    b.agents += 1;
-    b.turns += a.turns;
-    b.input_tokens += a.input_tokens;
-    b.cache_read_tokens += a.cache_read_tokens;
-    b.output_tokens += a.output_tokens;
   }
 
   const byModel = [...modelMap.values()]
@@ -839,28 +1008,80 @@ function inspectViaPython(appData, host, targetId, fullSession) {
       env: { ...process.env, ANTIGRAVITY_DATA_DIR: appData },
     });
     const d = JSON.parse(raw);
-    const agents = (d.agents || []).map((a) => {
-      const totCtx = (a.input_tokens || 0) + (a.cache_read_tokens || 0);
-      return {
+    const rawAgents = Array.isArray(d.agents) ? d.agents : [];
+    const bridgeByBase = new Map();
+    for (const a of rawAgents) {
+      if (a.role === 'codex-bridge' && typeof a.name === 'string' && a.name.endsWith('[codex]')) {
+        const base = a.name.slice(0, -7);
+        const arr = bridgeByBase.get(base) || [];
+        arr.push(a);
+        bridgeByBase.set(base, arr);
+      }
+    }
+    const agents = [];
+    for (const a of rawAgents) {
+      if (a.role === 'codex-bridge' && typeof a.name === 'string' && a.name.endsWith('[codex]')) continue;
+      const cbs = bridgeByBase.get(a.name) || [];
+      const shTurns = a.turns || 0;
+      const shIn = a.input_tokens || 0;
+      const shCache = a.cache_read_tokens || 0;
+      const shOut = a.output_tokens || 0;
+      let cbTurns = 0, cbIn = 0, cbCache = 0, cbOut = 0, topModel = '', topW = -1;
+      const slices = [];
+      if (shTurns > 0 || shIn > 0 || shOut > 0) {
+        slices.push({
+          model: a.model,
+          tier: classifyTier(a.model, a.role === 'coordinator' ? a.role : 'shell', a.role === 'coordinator' ? a.name : 'shell'),
+          turns: shTurns,
+          input_tokens: shIn,
+          cache_read_tokens: shCache,
+          output_tokens: shOut,
+        });
+      }
+      for (const cb of cbs) {
+        cbTurns += cb.turns || 0;
+        cbIn += cb.input_tokens || 0;
+        cbCache += cb.cache_read_tokens || 0;
+        cbOut += cb.output_tokens || 0;
+        const w = (cb.input_tokens || 0) + (cb.output_tokens || 0);
+        if (w > topW) { topW = w; topModel = cb.model; }
+        slices.push({
+          model: cb.model,
+          tier: classifyTier(cb.model, a.role, a.name),
+          turns: cb.turns || 0,
+          input_tokens: cb.input_tokens || 0,
+          cache_read_tokens: cb.cache_read_tokens || 0,
+          output_tokens: cb.output_tokens || 0,
+        });
+      }
+      const promote = a.role !== 'coordinator' && Boolean(topModel);
+      const cardModel = promote ? topModel : a.model;
+      const combIn = shIn + cbIn;
+      const combCache = shCache + cbCache;
+      const totCtx = combIn + combCache;
+      agents.push({
         name: a.name,
         role: a.role,
-        model: a.model,
-        tier: classifyTier(a.model, a.role, a.name),
+        model: cardModel,
+        shell_model: promote ? a.model : '',
+        tier: classifyTier(cardModel, a.role, a.name),
         state: a.state,
-        turns: a.turns || 0,
-        input_tokens: a.input_tokens || 0,
-        cache_read_tokens: a.cache_read_tokens || 0,
-        output_tokens: a.output_tokens || 0,
-        cache_hit_pct: totCtx > 0 ? Math.round((a.cache_read_tokens * 1000) / totCtx) / 10 : 0,
+        turns: shTurns + cbTurns,
+        input_tokens: combIn,
+        cache_read_tokens: combCache,
+        output_tokens: shOut + cbOut,
+        cache_hit_pct: totCtx > 0 ? Math.round((combCache * 1000) / totCtx) / 10 : 0,
         conversation_id: '',
         posts: 0,
         unread: 0,
         last_post_seq: 0,
         last_post_time: '',
         activity: '',
-        inherited: String(a.model || '').endsWith('*'),
-      };
-    });
+        inherited: !promote && String(a.model || '').endsWith('*'),
+        bridge_detail: cbs.length > 0 ? { codex_turns: cbTurns, codex_input: cbIn, codex_output: cbOut, shell_turns: shTurns, shell_input: shIn } : null,
+        model_slices: slices.length > 0 ? slices : null,
+      });
+    }
     const payload = formatUnifiedPayload({
       host: d.host || host,
       sessionId: d.session_id || targetId,

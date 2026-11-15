@@ -769,6 +769,30 @@ button[role="tab"].tab-btn[aria-selected="true"] .tab-pill {
   color: var(--sm-fg-2);
 }
 
+.badge-shell {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--sm-font-mono);
+  white-space: nowrap;
+  background: var(--sm-surface-2);
+  border: 1px dashed var(--sm-border-strong);
+  color: var(--sm-fg-muted);
+}
+
+.member-bridge-split {
+  font-size: 11px;
+  font-family: var(--sm-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sm-fg-muted);
+}
+
+.member-bridge-split .split-sep {
+  margin-inline: 4px;
+  opacity: 0.55;
+}
+
 .badge-model {
   border: 1px solid var(--sm-border-strong);
   color: var(--sm-fg);

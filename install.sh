@@ -62,15 +62,45 @@ if [ -d "$HOME/.claude" ] || command -v claude >/dev/null 2>&1; then
   fi
 fi
 
-# 3. OpenAI Codex (~/.codex/plugins/swarm-mix + skills & portable agents)
+# 3. OpenAI Codex (~/.codex/plugins/swarm-mix + skills & catalog-pinned portable agents)
 if [ -d "$HOME/.codex" ] || command -v codex >/dev/null 2>&1; then
   sync_item "$SRC_DIR" "$HOME/.codex/plugins/swarm-mix"
   sync_item "$SRC_DIR/skills/swarm-mix" "$HOME/.codex/skills/swarm-mix"
   mkdir -p "$HOME/.codex/agents"
-  for f in "$SRC_DIR"/platforms/codex/agents/*.toml; do
-    base="$(basename "$f")"
-    sync_item "$f" "$HOME/.codex/agents/$base"
-  done
+  python3 - "$SRC_DIR/platforms/codex/agents" "$HOME/.codex" <<'PY'
+import glob, json, os, pathlib, sys
+
+src_agents = pathlib.Path(sys.argv[1])
+codex_home = pathlib.Path(sys.argv[2])
+dst_agents = codex_home / "agents"
+dst_agents.mkdir(parents=True, exist_ok=True)
+
+slugs = []
+for p in sorted(glob.glob(str(codex_home / "*models*.json"))):
+    try:
+        doc = json.loads(pathlib.Path(p).read_text(encoding="utf-8", errors="replace"))
+        items = [x for x in (doc.get("models") or []) if isinstance(x, dict) and x.get("visibility") != "hide"]
+        items.sort(key=lambda x: int(x.get("priority", 999)))
+        for it in items:
+            s = str(it.get("slug") or "").strip()
+            if s and "/" not in s and s not in slugs:
+                slugs.append(s)
+    except Exception:
+        pass
+
+l3_model = next((s for s in slugs if any(k in s.lower() for k in ("luna", "mini", "nano", "flash"))), "")
+l2_model = next((s for s in slugs if any(k in s.lower() for k in ("sol", "sonnet")) and s != l3_model), "")
+
+for tf in sorted(src_agents.glob("*.toml")):
+    dst = dst_agents / tf.name
+    if dst.is_symlink() or dst.exists():
+        dst.unlink()
+    text = tf.read_text(encoding="utf-8")
+    pin = l3_model if tf.stem in ("monitor", "fast-scout") else (l2_model if tf.stem == "std-author" else "")
+    if pin and "\nmodel =" not in text:
+        text = text.replace('model_reasoning_effort =', f'model = "{pin}"\nmodel_reasoning_effort =', 1)
+    dst.write_text(text, encoding="utf-8")
+PY
   echo "  [✔] Codex       -> $HOME/.codex/{plugins,skills,agents}"
 fi
 

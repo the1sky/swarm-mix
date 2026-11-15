@@ -16,6 +16,7 @@ import argparse
 import dataclasses
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -198,6 +199,35 @@ def _sum_agy_transcript(
     return turns, in_tok, cache_tok, out_tok
 
 
+_TASK_LOG_NAME_RE = re.compile(r"(task-\d+\.log)\b")
+
+
+def _parse_codex_bridge_lines(text: str) -> List[Tuple[str, int, int, int, int]]:
+    tag = "[CODEX_BRIDGE_USAGE] {"
+    out: List[Tuple[str, int, int, int, int]] = []
+    for raw_line in text.splitlines():
+        s = raw_line.strip()
+        if not (s.startswith(tag) and s.endswith("}")):
+            continue
+        try:
+            payload = json.loads(s[len("[CODEX_BRIDGE_USAGE] "):])
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        mname = payload.get("model")
+        if not isinstance(mname, str) or not mname.strip():
+            continue
+        t = _safe_int(payload.get("turns"))
+        i = _safe_int(payload.get("input_tokens"))
+        c = _safe_int(payload.get("cache_read_tokens"))
+        o = _safe_int(payload.get("output_tokens"))
+        if t <= 0 and i <= 0 and o <= 0:
+            continue
+        out.append((mname.strip(), t, i, c, o))
+    return out
+
+
 def _extract_codex_bridge_usages(
     transcript_path: Path,
     min_step_index: Optional[int] = None,
@@ -206,55 +236,79 @@ def _extract_codex_bridge_usages(
     """
     Extract bridged OpenAI Codex CLI token telemetry emitted by `codex_bridge.py`
     (`[CODEX_BRIDGE_USAGE] {"model": ..., "turns": ..., "input_tokens": ..., ...}`)
-    inside Antigravity GENERIC tool-result steps. Returns {model: (turns, in, cache, out)}.
+    inside synchronous (`GENERIC`) and backgrounded (`SYSTEM_MESSAGE` + `tasks/task-*.log`)
+    Antigravity tool results. Returns {model: (turns, in, cache, out)}.
     """
     agg: Dict[str, Tuple[int, int, int, int]] = {}
-    if not transcript_path.is_file():
-        return agg
-    tag = "[CODEX_BRIDGE_USAGE] {"
-    try:
-        with transcript_path.open("r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                if "[CODEX_BRIDGE_USAGE]" not in line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except Exception:
-                    continue
-                if not isinstance(d, dict) or d.get("type") != "GENERIC":
-                    continue
-                sidx = d.get("step_index")
-                if isinstance(sidx, int):
-                    if min_step_index is not None and sidx < min_step_index:
-                        continue
-                    if max_step_index is not None and sidx > max_step_index:
-                        continue
-                content = d.get("content")
-                if not isinstance(content, str):
-                    continue
-                for raw_line in content.splitlines():
-                    s = raw_line.strip()
-                    if not (s.startswith(tag) and s.endswith("}")):
+    tasks_dir = transcript_path.parent.parent / "tasks"
+    parsed_task_logs: Set[str] = set()
+
+    def _add_items(items: List[Tuple[str, int, int, int, int]]) -> None:
+        for mname, t, i, c, o in items:
+            prev = agg.get(mname, (0, 0, 0, 0))
+            agg[mname] = (prev[0] + t, prev[1] + i, prev[2] + c, prev[3] + o)
+
+    if transcript_path.is_file():
+        try:
+            with transcript_path.open("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if "[CODEX_BRIDGE_USAGE]" not in line and "tasks/task-" not in line:
                         continue
                     try:
-                        payload = json.loads(s[len("[CODEX_BRIDGE_USAGE] "):])
+                        d = json.loads(line)
                     except Exception:
                         continue
-                    if not isinstance(payload, dict):
+                    if not isinstance(d, dict):
                         continue
-                    mname = payload.get("model")
-                    if not isinstance(mname, str) or not mname.strip():
+                    dtype = d.get("type")
+                    if dtype not in ("GENERIC", "SYSTEM_MESSAGE"):
                         continue
-                    t = _safe_int(payload.get("turns"))
-                    i = _safe_int(payload.get("input_tokens"))
-                    c = _safe_int(payload.get("cache_read_tokens"))
-                    o = _safe_int(payload.get("output_tokens"))
-                    if t <= 0 and i <= 0 and o <= 0:
+                    sidx = d.get("step_index")
+                    if isinstance(sidx, int):
+                        if min_step_index is not None and sidx < min_step_index:
+                            continue
+                        if max_step_index is not None and sidx > max_step_index:
+                            continue
+                    content = d.get("content")
+                    if not isinstance(content, str):
                         continue
-                    prev = agg.get(mname, (0, 0, 0, 0))
-                    agg[mname] = (prev[0] + t, prev[1] + i, prev[2] + c, prev[3] + o)
-    except OSError:
-        pass
+                    if dtype == "GENERIC":
+                        if '"messages":[' in content or ('"head":' in content and '"seq":' in content):
+                            continue
+                        _add_items(_parse_codex_bridge_lines(content))
+                    else:
+                        ref_logs = _TASK_LOG_NAME_RE.findall(content)
+                        fresh_refs = [lg for lg in ref_logs if lg not in parsed_task_logs]
+                        if ref_logs and not fresh_refs:
+                            continue
+                        direct_items = _parse_codex_bridge_lines(content)
+                        if direct_items:
+                            _add_items(direct_items)
+                            parsed_task_logs.update(ref_logs)
+                        else:
+                            for lg in fresh_refs:
+                                parsed_task_logs.add(lg)
+                                tf = tasks_dir / lg
+                                if tf.is_file():
+                                    try:
+                                        _add_items(_parse_codex_bridge_lines(tf.read_text(encoding="utf-8", errors="replace")))
+                                    except OSError:
+                                        pass
+        except OSError:
+            pass
+
+    if min_step_index is None and max_step_index is None and tasks_dir.is_dir():
+        try:
+            for tf in sorted(tasks_dir.glob("task-*.log")):
+                if tf.name in parsed_task_logs:
+                    continue
+                parsed_task_logs.add(tf.name)
+                txt = tf.read_text(encoding="utf-8", errors="replace")
+                if "[CODEX_BRIDGE_USAGE]" in txt:
+                    _add_items(_parse_codex_bridge_lines(txt))
+        except OSError:
+            pass
+
     return agg
 
 

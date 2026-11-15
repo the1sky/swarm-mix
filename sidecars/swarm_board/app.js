@@ -473,6 +473,16 @@
             : '';
         const actLine = a.activity ? `<div class="member-activity">⚡ ${esc(a.activity)}</div>` : '';
         const postMeta = a.posts > 0 ? `<span>Posts <span class="metric-strong">${a.posts}</span></span>` : '';
+        const shortShell = a.shell_model ? String(a.shell_model).replace(/^gemini-4-/, '').replace(/^claude-/, '') : '';
+        const shellBadge = shortShell
+          ? `<span class="badge-shell" title="Swarm board shell: ${esc(a.shell_model)}">shell: ${esc(shortShell)}</span>`
+          : '';
+        const bd = a.bridge_detail;
+        const bridgeLine = bd
+          ? bd.codex_turns > 0
+            ? `<div class="member-bridge-split">Codex <span class="metric-strong">${bd.codex_turns}t</span> · ${fmtNum(bd.codex_input)} in · ${fmtNum(bd.codex_output)} out <span class="split-sep">│</span> Shell <span class="metric-strong">${bd.shell_turns}t</span> · ${fmtNum(bd.shell_input)} in</div>`
+            : `<div class="member-bridge-split">Codex bridged (awaiting completion) <span class="split-sep">│</span> Shell <span class="metric-strong">${bd.shell_turns}t</span> · ${fmtNum(bd.shell_input)} in</div>`
+          : '';
 
         return `<article class="member-card" role="listitem" data-state="${esc(a.state)}">
           <div class="member-top">
@@ -481,6 +491,7 @@
             ${youBadge}
             <span class="badge-role">${esc(a.role)}</span>
             <span class="badge-model" data-tier="${esc(a.tier)}">${tierLabel(a.tier)} · ${esc(a.model)}</span>
+            ${shellBadge}
             ${openBtn}
           </div>
           ${actLine}
@@ -491,6 +502,7 @@
             <span>Out <span class="metric-strong">${fmtNum(a.output_tokens)}</span></span>
             ${postMeta}
           </div>
+          ${bridgeLine}
           <div class="burn-track" aria-hidden="true">
             <div class="burn-fill" data-tier="${esc(a.tier)}" style="width:${burnPct.toFixed(1)}%"></div>
           </div>

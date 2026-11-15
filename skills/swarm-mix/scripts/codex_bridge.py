@@ -51,6 +51,23 @@ def _read_default_model() -> str:
     return "codex-default"
 
 
+def _pick_lightweight_model() -> str:
+    """Resolve an L3 lightweight Codex model (e.g. gpt-6-luna) so scout/monitor never burn flagship quota."""
+    cat = _codex_home() / "native-router-models.json"
+    if cat.is_file():
+        try:
+            doc = json.loads(cat.read_text(encoding="utf-8", errors="replace"))
+            for item in doc.get("models") or []:
+                slug = str(item.get("slug") or "").strip()
+                if "/" in slug or item.get("visibility") == "hide":
+                    continue
+                if any(k in slug.lower() for k in ("luna", "mini", "nano", "flash")):
+                    return slug
+        except Exception:
+            pass
+    return "gpt-6-luna"
+
+
 def probe_codex() -> Dict[str, Any]:
     bin_path = _find_codex_bin()
     if not bin_path:
@@ -112,7 +129,7 @@ def _build_cmd(
     commit: Optional[str] = None,
 ) -> List[str]:
     in_git = _is_git_repo(cwd)
-    if mode == "review" and in_git:
+    if mode == "review" and in_git and (commit or base or not prompt):
         cmd = [bin_path, "exec", "review"]
         if commit:
             cmd.extend(["--commit", commit])
@@ -123,7 +140,7 @@ def _build_cmd(
         cmd.extend(["--ephemeral", "--json", "-c", f'model_reasoning_effort="{effort}"'])
         if model_override:
             cmd.extend(["-m", model_override])
-        if prompt:
+        if prompt and (commit or base):
             cmd.append(prompt)
         return cmd
 
@@ -213,6 +230,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Optional OpenAI Codex CLI bridge for swarm-mix.")
     parser.add_argument("--probe", action="store_true", help="Check whether local Codex CLI is installed and logged in.")
     parser.add_argument("--mode", choices=["review", "exec"], default="review", help="Execution mode (default: review).")
+    parser.add_argument(
+        "--role",
+        choices=["auto", "review", "author", "scout", "monitor"],
+        default="auto",
+        help="Worker role tier; scout/monitor automatically downgrade to lightweight L3 model.",
+    )
     parser.add_argument("--effort", choices=["low", "medium", "high"], default="medium", help="Reasoning effort.")
     parser.add_argument("--sandbox", choices=["read-only", "workspace-write"], default="read-only", help="Sandbox mode for exec.")
     parser.add_argument("--cwd", default=".", help="Target working directory.")
@@ -233,8 +256,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     bin_path = str(status["binary"])
-    active_model = args.model or str(status.get("model") or "codex-default")
+    env_role = os.environ.get("SWARM_MIX_ROLE", "").strip().lower()
+    eff_role = env_role if args.role == "auto" and env_role else args.role
+    resolved_model_override = args.model
     active_effort = args.effort
+    if eff_role in ("scout", "monitor") and not resolved_model_override:
+        resolved_model_override = _pick_lightweight_model()
+        active_effort = "low"
+
+    active_model = resolved_model_override or str(status.get("model") or "codex-default")
     cwd = Path(args.cwd).resolve()
     if not cwd.is_dir():
         cwd = Path.cwd()
@@ -246,7 +276,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         sandbox=args.sandbox,
         cwd=cwd,
         prompt=args.prompt,
-        model_override=args.model,
+        model_override=resolved_model_override,
         base=args.base,
         commit=args.commit,
     )

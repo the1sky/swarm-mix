@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "swarm-mix",
   "displayName": "Swarm Mix",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "3-layer dynamic capability routing, heterogeneous multi-agent compute tiering, mandatory cross-family verification, and per-agent token observability across Antigravity, Claude Code, and OpenAI Codex.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [

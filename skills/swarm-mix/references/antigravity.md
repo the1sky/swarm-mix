@@ -41,11 +41,11 @@ python3 "<本SKILL所在目录>/scripts/model_router.py" --host agy --agy-models
   - **无损降级兜底**：若命令输出含 `[CODEX_BRIDGE_UNAVAILABLE]`，薄壳节点不得用 Hydrogen 自行冒充 GPT 结论，须立即发帖告知主控；主控在该成员 `waiting` 时调用 `swarm(action="model", ...)` 热切换为 `model_router.py` 给出的 `Fallback` 原生模型继续完成任务。
 - **L3 只读检索、文档同步与后台守护（Lightweight & Daemons）**
   - **职责**：只读代码/日志检索（`research`）、文档与注释更新（`docs`），以及伴生守护节点 `narrator` 与 `monitor`。
-  - **模型**：统一显式绑定 `gemini-4-hydrogen-medium`（复杂长链路检索可升至 `gemini-4-hydrogen-high`；未开放 Hydrogen 时回退 `gemini-3.8-flash-medium`，Gemini 桶 `0%` 时跨桶回退 `claude-sonnet-5-5-low`）。
+  - **模型**：统一显式绑定 `gemini-4-hydrogen-medium`（复杂长链路检索可升至 `gemini-4-hydrogen-high`；未开放 Hydrogen 时回退 `gemini-3.8-flash-medium`，Gemini 桶 `0%` 时跨桶回退 `claude-sonnet-5-5-low`）。**严禁在 `monitor` / `narrator` / `research` 节点内调用 `codex_bridge.py` 或挂载旗舰模型**（即使 `codex_bridge.py` 被误赋予 `--role monitor/scout`，也会强制降级至 L3 轻量模型）。
 
 ## 3. 运行时模型热切换约束
 - 升降级算力或触发低配额告警时，须在目标成员处于 `waiting` 状态时调用 `swarm(action="model", name="...", model="...")` 无损保留上下文切换；若处于 `working` 则等待当前轮次结束。
 - **严禁通过 `kill` + 重新 `add` 更换模型**，以免销毁对话历史与 `share`/`branch` 隔离工作区。
 
 ## 4. Swarm Token 账单与空转监控
-- 原生 Swarm 面板仅展示模型与状态；启动 Swarm 或用户需要查看实时 Token 消耗时，可在回复中附上内嵌侧边栏按钮 `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`（聚合分模型算力占比、成员实时消耗条与看板消息），或运行 `../scripts/swarm_tokens.py --host agy --markdown`（终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。
+- 原生 Swarm 面板仅读取 `members.json` 的宿主薄壳模型（如 Codex 桥接节点的 `hydrogen` 壳）；启用 GPT/Codex 混编或需查看真实执行模型与分模型 Token 账单时，优先在回复中附上 `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`（自动将桥接成员主模型提升显示为实际 `gpt-*` 型号并标注 `shell`，同时精确拆分双池 Token 消耗），或运行 `../scripts/swarm_tokens.py --host agy --markdown`（终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。

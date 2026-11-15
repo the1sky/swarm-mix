@@ -672,6 +672,21 @@ def sync_agy_swarm_outcomes(force: bool = False) -> Dict[str, Any]:
 
 
 def _detect_bridged_codex_model(tp_path: Path) -> Optional[str]:
+    tasks_dir = tp_path.parent.parent / "tasks"
+    if tasks_dir.is_dir():
+        try:
+            for tf in sorted(tasks_dir.glob("task-*.log")):
+                txt = tf.read_text(encoding="utf-8", errors="replace")
+                if "[CODEX_BRIDGE_USAGE]" not in txt:
+                    continue
+                for raw in txt.splitlines():
+                    s = raw.strip()
+                    if s.startswith("[CODEX_BRIDGE_USAGE] {") and s.endswith("}"):
+                        payload = json.loads(s[len("[CODEX_BRIDGE_USAGE] "):])
+                        if isinstance(payload, dict) and isinstance(payload.get("model"), str):
+                            return payload["model"]
+        except Exception:
+            pass
     if not tp_path.is_file():
         return None
     try:
@@ -680,9 +695,12 @@ def _detect_bridged_codex_model(tp_path: Path) -> Optional[str]:
                 if "[CODEX_BRIDGE_USAGE]" not in line:
                     continue
                 d = json.loads(line)
-                if not isinstance(d, dict) or d.get("type") != "GENERIC":
+                if not isinstance(d, dict) or d.get("type") not in ("GENERIC", "SYSTEM_MESSAGE"):
                     continue
-                for raw in str(d.get("content") or "").splitlines():
+                content = str(d.get("content") or "")
+                if d.get("type") == "GENERIC" and '"messages":[' in content:
+                    continue
+                for raw in content.splitlines():
                     s = raw.strip()
                     if s.startswith("[CODEX_BRIDGE_USAGE] {") and s.endswith("}"):
                         payload = json.loads(s[len("[CODEX_BRIDGE_USAGE] "):])

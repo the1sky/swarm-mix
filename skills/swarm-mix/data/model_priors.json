@@ -186,6 +186,19 @@
         "throughput_efficiency": 0.56
       }
     },
+    "gpt-6.1-sol": {
+      "vendor": "openai",
+      "tier": "l2",
+      "context_window": 400000,
+      "modalities": ["text", "image"],
+      "scores": {
+        "architecture_refactor": 0.90,
+        "algorithm_state": 0.92,
+        "frontend_multimodal": 0.87,
+        "bug_hunting": 0.91,
+        "throughput_efficiency": 0.82
+      }
+    },
     "gpt-6-sol": {
       "vendor": "openai",
       "tier": "l2",

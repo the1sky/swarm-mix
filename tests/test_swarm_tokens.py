@@ -913,6 +913,99 @@ class TestSwarmTokensSuite(unittest.TestCase):
                 self.assertEqual(by_name["verifier[codex]"].cache_read_tokens, 20000)
                 self.assertEqual(by_name["verifier[codex]"].output_tokens, 450)
 
+    def test_backgrounded_system_message_and_monitor_role_guard(self) -> None:
+        """
+        Regression test:
+        1. Backgrounded codex_bridge.py runs arrive via SYSTEM_MESSAGE (often middle-truncated in transcript.jsonl)
+           plus `.system_generated/tasks/task-XX.log`; must recover exact GPT tokens with zero double-counting,
+           and ignore read_board GENERIC messages quoting `[CODEX_BRIDGE_USAGE]`.
+        2. `codex_bridge.py --role monitor` / `--role scout` automatically downgrades to L3 `gpt-6-luna (low)`
+           instead of inheriting `config.toml`'s flagship `gpt-6-astra`.
+        """
+        import io
+        import contextlib
+
+        bridge_path = Path(__file__).resolve().parent.parent / "skills" / "swarm-mix" / "scripts" / "codex_bridge.py"
+        spec = importlib.util.spec_from_file_location("codex_bridge", bridge_path)
+        assert spec and spec.loader
+        cb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cb)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            codex_home = tmp / "codex_home"
+            codex_home.mkdir()
+            (codex_home / "config.toml").write_text('model = "gpt-6-astra"\n', encoding="utf-8")
+            (codex_home / "native-router-models.json").write_text(
+                json.dumps({"models": [{"slug": "gpt-6-astra", "priority": 1}, {"slug": "gpt-6-luna", "priority": 3}]}),
+                encoding="utf-8",
+            )
+
+            fake_bin = tmp / "fake-codex"
+            fake_bin.write_text(
+                "#!/bin/sh\n"
+                'if [ "$1" = "login" ]; then echo "Logged in"; exit 0; fi\n'
+                'echo \'{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"All clear"}}\'\n'
+                'echo \'{"type":"turn.completed","usage":{"input_tokens":5000,"cached_input_tokens":4000,"output_tokens":80}}\'\n',
+                encoding="utf-8",
+            )
+            fake_bin.chmod(0o755)
+
+            with mock.patch.dict(os.environ, {"SWARM_MIX_CODEX_BIN": str(fake_bin), "CODEX_HOME": str(codex_home)}):
+                mbuf = io.StringIO()
+                with contextlib.redirect_stdout(mbuf):
+                    rc = cb.main(["--role", "monitor", "--cwd", str(tmp), "check board"])
+                self.assertEqual(rc, 0)
+                self.assertIn('"model": "gpt-6-luna (low)"', mbuf.getvalue())
+                self.assertNotIn("gpt-6-astra", mbuf.getvalue())
+
+            # Simulate truncated SYSTEM_MESSAGE + untruncated task-27.log + monitor read_board quote
+            w_sys = tmp / "brain" / "audit-w" / ".system_generated"
+            (w_sys / "logs").mkdir(parents=True)
+            (w_sys / "tasks").mkdir(parents=True)
+            (w_sys / "tasks" / "task-27.log").write_text(
+                'Audit complete.\n\n[CODEX_BRIDGE_USAGE] {"model": "gpt-6-astra (high)", "turns": 1, "input_tokens": 115000, "cache_read_tokens": 900000, "output_tokens": 7500}\n',
+                encoding="utf-8",
+            )
+            (w_sys / "tasks" / "task-28.log").write_text(
+                'Second pass.\n\n[CODEX_BRIDGE_USAGE] {"model": "gpt-6-astra (high)", "turns": 1, "input_tokens": 85000, "cache_read_tokens": 600000, "output_tokens": 2500}\n',
+                encoding="utf-8",
+            )
+            w_tp = w_sys / "logs" / "transcript.jsonl"
+            w_tp.write_text(
+                "\n".join([
+                    # Truncated SYSTEM_MESSAGE referencing task-27.log (must read task-27.log once, not twice!)
+                    json.dumps({
+                        "step_index": 35,
+                        "type": "SYSTEM_MESSAGE",
+                        "truncated_fields": ["content"],
+                        "content": "<SYSTEM_MESSAGE>\n...ens\": 900000, \"output_tokens\": 7500}\nLog: file:///tmp/tasks/task-27.log\n</SYSTEM_MESSAGE>",
+                    }),
+                    # Untruncated SYSTEM_MESSAGE referencing task-28.log (must deduplicate with task-28.log!)
+                    json.dumps({
+                        "step_index": 40,
+                        "type": "SYSTEM_MESSAGE",
+                        "content": '<SYSTEM_MESSAGE>\n[CODEX_BRIDGE_USAGE] {"model": "gpt-6-astra (high)", "turns": 1, "input_tokens": 85000, "cache_read_tokens": 600000, "output_tokens": 2500}\nLog: file:///tmp/tasks/task-28.log\n</SYSTEM_MESSAGE>',
+                    }),
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            usages = st._extract_codex_bridge_usages(w_tp)
+            self.assertEqual(usages, {"gpt-6-astra (high)": (2, 200000, 1500000, 10000)})
+
+            # Monitor transcript reading board message that quotes [CODEX_BRIDGE_USAGE] must stay empty
+            m_tp = tmp / "brain" / "mon-w" / ".system_generated" / "logs" / "transcript.jsonl"
+            m_tp.parent.mkdir(parents=True)
+            m_tp.write_text(
+                json.dumps({
+                    "step_index": 10,
+                    "type": "GENERIC",
+                    "content": '{"head":50,"messages":[{"seq":49,"agent":"audit-gpt","text":"Done\\n[CODEX_BRIDGE_USAGE] {\\"model\\": \\"gpt-6-astra (high)\\", \\"turns\\": 1, \\"input_tokens\\": 99999, \\"cache_read_tokens\\": 0, \\"output_tokens\\": 500}"}]}',
+                }) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(st._extract_codex_bridge_usages(m_tp), {})
+
 
 if __name__ == "__main__":
     unittest.main()
