@@ -72,7 +72,7 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 | 层级 | Google Antigravity (`swarm`) | Claude Code (`Agent`) | OpenAI Codex (`spawn_agent` + CLI) |
 | :--- | :--- | :--- | :--- |
 | **L1 核心攻坚** | 继承主会话模型 *(轻量主会话升 `Carbon High`)* | 主会话模型 / `Opus (High)` | 主会话默认主模型（`High`） |
-| **L2 常规编码** | `Gemini 4 Argon (High)` / `Claude Sonnet 5.5 (High)` | `std-author` → `Sonnet (High)` | `std-author`（`Medium`） |
+| **L2 常规编码** | `Gemini 4 Argon (Medium)` / `Claude Sonnet 5.5 (Medium)` | `std-author` → `Sonnet (Medium)` | `std-author`（`Medium`） |
 | **跨家族互审** | Gemini ↔ `Opus 5.5` / `Carbon` *(支持可选本机 `Codex` GPT 桥接)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`，回退 `sonnet`)* |
 | **L3 轻量与守护** | `Gemini 4 Hydrogen (Medium)` *(含 `narrator` / `monitor`)* | `fast-scout` → `Haiku (Medium)` | `fast-scout`（`Low`） |
 

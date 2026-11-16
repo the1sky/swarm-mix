@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-11-15",
+  "updated_at": "2026-11-16",
   "bayesian_config": {
     "prior_pseudocount": 8.0,
     "min_samples_to_adapt": 3,
@@ -34,7 +34,7 @@
     "frontend_ui": {
       "label": "L1/L2 Frontend UI, CSS/DOM & Multimodal",
       "tier": "l1",
-      "preferred_effort": "high",
+      "preferred_effort": "medium",
       "weights": {
         "frontend_multimodal": 0.60,
         "architecture_refactor": 0.25,
@@ -46,7 +46,7 @@
     "backend_refactor": {
       "label": "L2 Standard Module Coding, Refactor & Tests",
       "tier": "l2",
-      "preferred_effort": "high",
+      "preferred_effort": "medium",
       "weights": {
         "architecture_refactor": 0.45,
         "throughput_efficiency": 0.30,

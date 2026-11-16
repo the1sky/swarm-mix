@@ -114,6 +114,7 @@ if [ "$MODE" = "link" ]; then
   ln -sf "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
   ln -sf "$SRC_DIR/skills/swarm-mix/scripts/model_router.py" "$HOME/.local/bin/swarm-router"
 else
+  rm -f "$HOME/.local/bin/swarm-tokens" "$HOME/.local/bin/swarm-router"
   cp -f "$SRC_DIR/skills/swarm-mix/scripts/swarm_tokens.py" "$HOME/.local/bin/swarm-tokens"
   cp -f "$SRC_DIR/skills/swarm-mix/scripts/model_router.py" "$HOME/.local/bin/swarm-router"
   chmod +x "$HOME/.local/bin/swarm-tokens" "$HOME/.local/bin/swarm-router"

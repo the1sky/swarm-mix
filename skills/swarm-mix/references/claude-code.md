@@ -15,7 +15,7 @@ python3 "<本SKILL所在目录>/scripts/model_router.py" --host claude -m
 | 层级 | 子代理标识 (`subagent_type`) | 底层模型与推理档位 | 适用职责与边界 |
 | :--- | :--- | :--- | :--- |
 | **L1 核心攻坚** | 主会话（或显式 `opus`） | 当前主模型 / `Claude Opus (High)` | 跨模块架构设计、核心算法实现、疑难并发/根因排障、最终合入决策 |
-| **L2 常规编码** | `swarm-mix:std-author`（或 `std-author`） | `Claude Sonnet (High)` | 边界清晰的独立模块开发、接口适配、单元测试补齐、常规缺陷修复（并行派发时必须声明互不重叠的文件所有权） |
+| **L2 常规编码** | `swarm-mix:std-author`（或 `std-author`） | `Claude Sonnet (Medium)` | 边界清晰的独立模块开发、接口适配、单元测试补齐、常规缺陷修复（默认 `Medium` 防长思考空转；并行派发时声明互不重叠的文件所有权） |
 | **Cross-Verify** | `swarm-mix:cross-verifier`（或 `cross-verifier`） | `Haiku` 薄壳 → **OpenAI Codex 主模型 (`Medium` / `High`)** | 强制跨模型家族 Diff 审查、边界找茬与验收（只报缺陷不改代码，消除同源盲区） |
 | **L3 轻量检索** | `swarm-mix:fast-scout`（或 `fast-scout`） | `Claude Haiku (Medium)` | 代码/日志高频只读检索、符号定位、获明确授权时的文档与注释同步 |
 

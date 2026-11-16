@@ -59,7 +59,9 @@ class TestModelRouterStandaloneAndAdaptive(unittest.TestCase):
 
             recs = plan["recommendations"]
             self.assertTrue(all(r["channel"] == "native" for r in recs.values()))
-            self.assertEqual(recs["frontend_ui"]["recommended_model"], "gemini-4-carbon-high")
+            self.assertEqual(recs["architecture"]["recommended_model"], "claude-opus-5-5-high")
+            self.assertEqual(recs["frontend_ui"]["recommended_model"], "gemini-4-carbon-medium")
+            self.assertEqual(recs["backend_refactor"]["recommended_model"], "claude-sonnet-5-5-medium")
             self.assertEqual(recs["cross_verify"]["recommended_model"], "claude-opus-5-5-medium")
             self.assertEqual(recs["scout_daemon"]["recommended_model"], "gemini-4-hydrogen-medium")
 
@@ -77,7 +79,7 @@ class TestModelRouterStandaloneAndAdaptive(unittest.TestCase):
             recs = plan["recommendations"]
             self.assertTrue(all(r["channel"] == "native" for r in recs.values()))
             self.assertEqual(recs["architecture"]["recommended_model"], "opus (high)")
-            self.assertEqual(recs["backend_refactor"]["recommended_model"], "sonnet (high)")
+            self.assertEqual(recs["backend_refactor"]["recommended_model"], "sonnet (medium)")
             self.assertEqual(recs["scout_daemon"]["recommended_model"], "haiku (medium)")
 
             rc = mr.main(["--host", "claude", "-m"])

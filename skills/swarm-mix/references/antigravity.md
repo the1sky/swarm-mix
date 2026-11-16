@@ -8,7 +8,7 @@
 python3 "<本SKILL所在目录>/scripts/model_router.py" --host agy --agy-models-json '<swarm_models返回的JSON>' -m
 ```
 - **独立运行零依赖保障**：未安装或未登录 Codex / Claude CLI 时，`model_router.py` 始终以退出码 `0` 静默输出纯 Antigravity 原生双池（Gemini 桶 + Claude/GPT-OSS 桶）最优方案，严禁报错或阻塞流程。
-- **按能力画像专长派单**：在配额充足（`≥15%`）时，优先参考 `model_router.py` 推荐表按子任务专长绑定模型（如前端/多模态倾向 `gemini-4-carbon-high`、复杂架构倾向 `claude-opus-5-5-high` / `gemini-4-carbon-high`、高密算法状态机在 Codex 就绪时可选走 `codex-bridge` 调度 `gpt-6-astra`、常规后端重构走 `argon` / `sonnet`、只读检索守护走 `hydrogen`）。
+- **按能力画像专长派单**：在配额充足（`≥15%`）时，优先参考 `model_router.py` 推荐表按子任务专长绑定模型（如前端/多模态默认 `gemini-4-carbon-medium`、复杂架构与并发攻坚用 `claude-opus-5-5-high` / `gemini-4-carbon-high`、高密算法状态机在 Codex 就绪时可选走 `codex-bridge` 调度 `gpt-6-astra`、常规后端重构与单测默认 `gemini-4-argon-medium` / `claude-sonnet-5-5-medium`、只读检索守护走 `hydrogen`），避免常规编码全员继承 `High` 档引发超长 `thinking` 空转。
 - **账号模型池自适应**：严禁向 `swarm(action="add")` 传入 `models` 返回列表之外的 ID；新发布未知型号由 `model_router.py` 按厂商与梯队先验自动继承能力分。
 - **AI Credits 兜底**：若 `quota_note` 显示已由 AI Credits 接管计费，原定模型视作满额可继续正常使用。
 - **低水位节流（`<15%` 告警但未归零）**：`model_router.py` 自动对 `<15%` 配额桶施加节流权重：同桶内降档（`Carbon` → `Argon`/`Hydrogen`；`Opus` → `Sonnet`），且当 Claude 桶 `<15%` 而本机 Codex 可用时，自动将跨家族 `cross_verify` 路由至 **GPT 桥接模式**以节省 Claude 余量。
@@ -23,9 +23,10 @@ python3 "<本SKILL所在目录>/scripts/model_router.py" --host agy --agy-models
 - **L1 核心架构与复杂攻坚（Complex Author）**
   - **职责**：跨模块架构重构、核心算法实现、复杂并发/根因排障。
   - **模型**：默认省略 `model` 以继承主会话模型；若主会话当前为轻量级模型（如 `Gemini 4 Hydrogen` 或 `Gemini 3.8 Flash`），显式升级绑定 `gemini-4-carbon-high`。
-- **L2 常规模块编码与单测（Standard Author）**
-  - **职责**：边界清晰的模块开发、接口适配、单元测试编写、常规缺陷修复。
-  - **模型**：主会话属 Gemini 系时绑定 `gemini-4-argon-high`；属 Claude 系时绑定 `claude-sonnet-5-5-high`。
+- **L2 常规模块编码、UI 实现与单测（Standard Author · 默认 `Medium`）**
+  - **职责**：边界清晰的模块开发、前端 UI 组件实现、接口适配、单元测试编写、常规缺陷修复。
+  - **模型**：主会话属 Gemini 系时绑定 `gemini-4-argon-medium`（高视觉多模态 UI 可选 `gemini-4-carbon-medium`）；属 Claude 系时绑定 `claude-sonnet-5-5-medium`。仅在连续两轮修复未果或涉及复杂并发状态机时升 `High`。
+  - **防空转纪律**：在 `brief` 中明确要求 Worker 优先通过 `grep`、单测与类型检查实测收敛，严禁在 `thinking` 中逐行预写完整文件草稿或人肉模拟长调用链。
 - **Cross-Verify 独立审查与验收（`verifier`）——强制跨家族异构（默认 `Medium`，高危升 `High`）**
   - **职责**：Diff 审查、边界找茬、测试运行与验收（只报问题不直接改代码）。
   - **默认日常审查（`Medium`）**：必须与被审 Author **跨模型家族绑定**以消除同源思维盲区：

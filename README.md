@@ -77,7 +77,7 @@ npx skills add https://github.com/the1sky/swarm-mix --skill swarm-mix -g
 | Tier | Google Antigravity (`swarm`) | Claude Code (`Agent`) | OpenAI Codex (`spawn_agent` + CLI) |
 | :--- | :--- | :--- | :--- |
 | **L1 Core / Arch** | Inherit session model *(or `Carbon High` if on lightweight)* | Session model / `Opus (High)` | Session default model (`High`) |
-| **L2 Standard Coding** | `Gemini 4 Argon (High)` / `Claude Sonnet 5.5 (High)` | `std-author` → `Sonnet (High)` | `std-author` (`Medium`) |
+| **L2 Standard Coding** | `Gemini 4 Argon (Medium)` / `Claude Sonnet 5.5 (Medium)` | `std-author` → `Sonnet (Medium)` | `std-author` (`Medium`) |
 | **Cross-Family Review** | Gemini ↔ `Claude Opus 5.5` / `Gemini 4 Carbon` *(+ optional local `Codex` GPT bridge)* | `cross-verifier` → `codex exec review` *(`Medium` / `High`)* | `claude -p --model opus` *(`medium` / `high`, fallback `sonnet`)* |
 | **L3 Scout / Docs / Daemons** | `Gemini 4 Hydrogen (Medium)` *(incl. `narrator` & `monitor`)* | `fast-scout` → `Haiku (Medium)` | `fast-scout` (`Low`) |
 

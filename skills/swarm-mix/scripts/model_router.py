@@ -282,10 +282,12 @@ def discover_agy_pool(agy_models_json: Optional[str], is_native: bool, refresh_a
             "gemini-4-carbon-high",
             "gemini-4-carbon-medium",
             "gemini-4-argon-high",
+            "gemini-4-argon-medium",
             "gemini-4-hydrogen-medium",
             "claude-opus-5-5-medium",
             "claude-opus-5-5-high",
             "claude-sonnet-5-5-high",
+            "claude-sonnet-5-5-medium",
         ):
             base_id, eff = canonicalize_model_id(mid)
             entries.append({
@@ -432,6 +434,7 @@ def discover_claude_pool(is_native: bool) -> Dict[str, Any]:
         ("opus", "claude-opus-5-5", "high", "Claude Opus (High)"),
         ("opus", "claude-opus-5-5", "medium", "Claude Opus (Medium)"),
         ("sonnet", "claude-sonnet-5-5", "high", "Claude Sonnet (High)"),
+        ("sonnet", "claude-sonnet-5-5", "medium", "Claude Sonnet (Medium)"),
         ("haiku", "claude-haiku-4-5", "medium", "Claude Haiku (Medium)"),
     ]
     entries = []
