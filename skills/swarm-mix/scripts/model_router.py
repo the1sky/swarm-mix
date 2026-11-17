@@ -837,12 +837,12 @@ def compute_routing_plan(
         raw_candidates.extend(p_agy["models"])
         if p_codex["available"]:
             raw_candidates.extend(p_codex["models"])
-        # Only add external claude-cli bridge if Antigravity's native Anthropic quota is 0% or missing
-        has_native_claude = any(
-            "claude" in m["base_id"] and (m.get("quota_pct") is None or m.get("quota_pct", 1.0) > 0.0)
+        # Unlock external claude-cli pool whenever Antigravity's native Anthropic bucket is low (<15%) or exhausted
+        has_healthy_native_claude = any(
+            "claude" in m["base_id"] and (m.get("quota_pct") is None or m.get("quota_pct", 1.0) >= 0.15)
             for m in p_agy["models"]
         )
-        if p_claude["available"] and not has_native_claude:
+        if p_claude["available"] and not has_healthy_native_claude:
             raw_candidates.extend(p_claude["models"])
     elif resolved_host == "claude":
         p_claude = discover_claude_pool(is_native=True)
@@ -913,6 +913,8 @@ def compute_routing_plan(
             cap_score = sum(float(weights.get(d, 0.0)) * float(m["scores"].get(d, 0.0)) for d in DIMS)
             if m["channel"] == "native":
                 native_bonus = 0.05 if task_key in ("architecture", "frontend_ui", "backend_refactor") else 0.02
+            elif m["channel"] == "claude-cli":
+                native_bonus = -0.15 if task_key == "scout_daemon" else -0.05
             else:
                 native_bonus = -0.15 if task_key == "scout_daemon" else 0.0
 
@@ -945,7 +947,14 @@ def compute_routing_plan(
         ranked.sort(key=lambda x: x[0], reverse=True)
         if ranked:
             best_score, best_m, reason = ranked[0]
-            alt = next((item[1]["id"] for item in ranked[1:] if item[1]["base_id"] != best_m["base_id"]), None)
+            alt = next(
+                (
+                    item[1]["id"]
+                    for item in ranked[1:]
+                    if item[1]["base_id"] != best_m["base_id"] or item[1]["channel"] != best_m["channel"]
+                ),
+                None,
+            )
             recommendations[task_key] = {
                 "task": task_key,
                 "label": tprof.get("label", task_key),

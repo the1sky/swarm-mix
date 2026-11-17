@@ -246,6 +246,70 @@ class TestModelRouterStandaloneAndAdaptive(unittest.TestCase):
             self.assertGreater(opus["empirical"]["verify_shift"], 0.0)
             self.assertLessEqual(opus["empirical"]["verify_shift"], 0.15)
 
+    def test_low_native_claude_unlocks_external_claude_cli_and_codex_timeout_falls_back_to_fast_l2(self) -> None:
+        import sys as _sys
+
+        scripts_dir = Path(__file__).resolve().parents[1] / "skills" / "swarm-mix" / "scripts"
+        if str(scripts_dir) not in _sys.path:
+            _sys.path.insert(0, str(scripts_dir))
+        import codex_bridge as cb
+
+        fake_claude = _write_exec(self.root / "fake_claude", "#!/bin/sh\nexit 0\n")
+        (self.claude_dir / ".credentials.json").write_text("{}", encoding="utf-8")
+        agy_low_both = json.dumps(
+            {
+                "models": ["gemini-4-argon-medium", "claude-opus-5-5-medium"],
+                "quotas": {
+                    "gemini-4-argon-medium": {"quota_remaining": "11%"},
+                    "claude-opus-5-5-medium": {"quota_remaining": "1%"},
+                },
+            }
+        )
+        with patch.dict(os.environ, self._base_env(SWARM_MIX_CLAUDE_BIN=str(fake_claude)), clear=False):
+            plan = mr.compute_routing_plan(host="agy", agy_models_json=agy_low_both)
+            # Native Claude at 1% (<15%) unlocks external claude-cli pool even without Codex
+            self.assertEqual(plan["recommendations"]["frontend_ui"]["channel"], "claude-cli")
+            self.assertEqual(plan["recommendations"]["cross_verify"]["channel"], "claude-cli")
+
+        # Verify codex_bridge timeout fallback onto fast L2 `gpt-6.1-sol` instead of returning UNAVAILABLE
+        (self.codex_dir / "models_cache.json").write_text(
+            json.dumps(
+                {
+                    "models": [
+                        {"slug": "gpt-6.1-sol", "priority": 1},
+                        {"slug": "gpt-6-astra", "priority": 2},
+                        {"slug": "gpt-6-luna", "priority": 3},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        fake_codex = _write_exec(
+            self.root / "fake_codex_fb",
+            "#!/bin/sh\nif [ \"$1\" = \"login\" ]; then echo 'Logged in'; exit 0; fi\nexit 0\n",
+        )
+        calls = []
+
+        def fake_run_and_parse(cmd, cwd, timeout):
+            calls.append(cmd)
+            if len(calls) == 1:
+                return 124, "", {"turns": 0, "input_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0}, "timeout after 600s"
+            return 0, "Audit via fast L2 succeeded.", {"turns": 1, "input_tokens": 5000, "cache_read_tokens": 20000, "output_tokens": 800}, ""
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with patch.dict(os.environ, self._base_env(SWARM_MIX_CODEX_BIN=str(fake_codex)), clear=False):
+            with patch.object(cb, "_run_and_parse", side_effect=fake_run_and_parse):
+                with redirect_stdout(buf):
+                    rc = cb.main(["--mode", "review", "--model", "gpt-6-astra", "--effort", "high", "scan repo"])
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("[Fallback: gpt-6.1-sol (medium)]", out)
+        self.assertIn('"model": "gpt-6.1-sol (medium)"', out)
+        self.assertEqual(len(calls), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,21 +51,44 @@ def _read_default_model() -> str:
     return "codex-default"
 
 
-def _pick_lightweight_model() -> str:
-    """Resolve an L3 lightweight Codex model (e.g. gpt-6-luna) so scout/monitor never burn flagship quota."""
-    cat = _codex_home() / "native-router-models.json"
-    if cat.is_file():
+def _iter_codex_catalog_slugs() -> List[str]:
+    slugs: List[str] = []
+    chome = _codex_home()
+    for p in sorted(chome.glob("*models*.json")):
+        if not p.is_file():
+            continue
         try:
-            doc = json.loads(cat.read_text(encoding="utf-8", errors="replace"))
-            for item in doc.get("models") or []:
+            doc = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+            items = [x for x in (doc.get("models") or []) if isinstance(x, dict) and x.get("visibility") != "hide"]
+            items.sort(key=lambda x: int(x.get("priority", 999)))
+            for item in items:
                 slug = str(item.get("slug") or "").strip()
-                if "/" in slug or item.get("visibility") == "hide":
-                    continue
-                if any(k in slug.lower() for k in ("luna", "mini", "nano", "flash")):
-                    return slug
+                if slug and "/" not in slug and slug not in slugs:
+                    slugs.append(slug)
         except Exception:
             pass
+    return slugs
+
+
+def _pick_lightweight_model() -> str:
+    """Resolve an L3 lightweight Codex model (e.g. gpt-6-luna) so scout/monitor never burn flagship quota."""
+    for slug in _iter_codex_catalog_slugs():
+        if any(k in slug.lower() for k in ("luna", "mini", "nano", "flash")):
+            return slug
     return "gpt-6-luna"
+
+
+def _pick_fast_l2_model(exclude: str = "") -> str:
+    """Resolve a high-throughput L2 Codex model (e.g. gpt-6.1-sol) for timeout/overload in-pool fallback."""
+    ex = exclude.strip().lower()
+    l3 = _pick_lightweight_model().lower()
+    for slug in _iter_codex_catalog_slugs():
+        low = slug.lower()
+        if low == ex or low == l3:
+            continue
+        if any(k in low for k in ("6.1-sol", "sol")):
+            return slug
+    return _pick_lightweight_model()
 
 
 def probe_codex() -> Dict[str, Any]:
@@ -282,29 +305,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     rc, text, stats, err_msg = _run_and_parse(cmd, cwd, args.timeout)
 
-    # Automatic quota / rate-limit fallback to lightweight Codex tier
-    if (rc != 0 or not text) and not args.model:
+    # Automatic in-pool Codex fallback on timeout (flagship -> fast L2 e.g. gpt-6.1-sol) or quota/rate-limit -> L3
+    if (rc != 0 or not text) and eff_role not in ("scout", "monitor"):
         low_err = err_msg.lower()
-        if any(k in low_err for k in ("quota", "rate limit", "429", "usage limit", "capacity", "not found")):
-            fb_model = "gpt-6-luna"
-            fb_cmd = _build_cmd(
-                bin_path=bin_path,
-                mode=args.mode,
-                effort="medium",
-                sandbox=args.sandbox,
-                cwd=cwd,
-                prompt=args.prompt,
-                model_override=fb_model,
-                base=args.base,
-                commit=args.commit,
+        is_timeout = any(k in low_err for k in ("timeout", "timed out"))
+        is_quota_or_cap = any(
+            k in low_err for k in ("quota", "rate limit", "429", "usage limit", "capacity", "overloaded", "not found")
+        )
+        if is_timeout or is_quota_or_cap:
+            fb_model = (
+                _pick_fast_l2_model(exclude=active_model)
+                if is_timeout
+                else (_pick_fast_l2_model(exclude=active_model) if args.model else _pick_lightweight_model())
             )
-            rc2, text2, stats2, err_msg2 = _run_and_parse(fb_cmd, cwd, args.timeout)
-            if rc2 == 0 and text2:
-                rc, text, err_msg = rc2, f"[Fallback: {fb_model}]\n{text2}", err_msg2
-                active_model = fb_model
-                active_effort = "medium"
-                for k in stats:
-                    stats[k] += stats2[k]
+            if fb_model and (fb_model != active_model or active_effort == "high"):
+                fb_cmd = _build_cmd(
+                    bin_path=bin_path,
+                    mode=args.mode,
+                    effort="medium",
+                    sandbox=args.sandbox,
+                    cwd=cwd,
+                    prompt=args.prompt,
+                    model_override=fb_model,
+                    base=args.base,
+                    commit=args.commit,
+                )
+                rc2, text2, stats2, err_msg2 = _run_and_parse(fb_cmd, cwd, args.timeout)
+                if rc2 == 0 and text2:
+                    rc, text, err_msg = rc2, f"[Fallback: {fb_model} (medium)]\n{text2}", err_msg2
+                    active_model = fb_model
+                    active_effort = "medium"
+                    for k in stats:
+                        stats[k] += stats2[k]
 
     if rc != 0 and not text:
         fail_payload = {
