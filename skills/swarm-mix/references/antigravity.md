@@ -49,7 +49,8 @@ python3 "<本SKILL所在目录>/scripts/model_router.py" --host agy --agy-models
 
 ## 3. 运行时模型热切换与防击穿收束约束
 - **初始一步到位，禁 `>30K` 随意切模**：Prompt Cache 与具体模型强绑定——创建成员时须按 `model_router.py` 一步到位绑定目标模型，**严禁非配额原因对已累积 `>30K` 上下文的活跃成员调用 `swarm(action="model")` 做横向或降档试探切模**。仅限以下三种合法场景在目标成员 `waiting` 时无损热切：① 触发 `429` / 配额归零（`0%`）跨桶兜底；② 连续两轮修复未果需升 `-high` 攻坚；③ 用户口头明确要求换模。
-- **严禁通过 `kill` + 重新 `add` 更换模型**，以免销毁对话历史与 `share`/`branch` 隔离工作区。
+- **严禁仅因“换模型”而 `kill` + 重新 `add`**，以免无谓销毁低水位工作区。
+- **Worker `≥145K` 自动落盘换血（Swarm 子节点的等效 `/compact`）**：后台 Worker 无 `/compact` 入口；当某成员上下文达 `145K`（`Context-Guard` 会自动向主控告警并拦截新轮次派单），若仍需后续开发或修复，主控**必须执行落盘换血**：确认该节点代码已 `git commit`（`share`/`branch` 工作区先合流至主仓或目标分支；若尚有未提交改动，可在 `post_message` 附 `[ROTATE_LAND]` 让其先提交落盘）→ `swarm(action="kill", name="<name>")` → `swarm(action="add", name="<name>-2", ...)`，`brief` 仅传「当前 commit SHA + 待处理问题摘要 + `read_board(since=<当前最新#seq>)`」（严禁 `since: 0` 拉取历史旧帖）。
 - **跨轮次收束与防看板堆积**：同一会话完结一轮 Swarm 后，若主控上下文已超 `120K`，须提示用户先执行 `/compact`；若开启**全新独立需求的新一轮 Swarm**，主动建议用户**新开会话**（`/compact` 不会清空旧轮次留言板历史 `#seq`，单会话连跑多轮会导致新成员拉取百条旧帖直冲深水区）。
 
 ## 4. Swarm Token 账单与空转监控
