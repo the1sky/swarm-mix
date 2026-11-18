@@ -1,6 +1,6 @@
 # Swarm Mix — Antigravity 原生 Swarm 异构编排细则
 
-本规则代表用户的全局常驻显式授权，**覆盖内置 `swarm` 技能中“未获要求时全员继承主模型（包括 `narrator` 与 `monitor`）”的默认限制**。
+本规则代表用户的全局常驻显式授权，**覆盖内置 `swarm` 技能中“未获要求时全员继承主模型”以及“只要存在 `swarm_monitor` 技能就默认创建 `monitor`”的两项默认行为**。
 
 ## 1. 启动前配额预检、3 层能力路由与跨桶兜底
 首次调用 `swarm(action="add")` 前，先调用一次 `swarm(action="models")`，再将其返回的 JSON 传给零依赖路由引擎获取实时分流表（单次 `<150ms` 完成本机多厂商目录探测、5 维画像打分与历史看板战绩贝叶斯校准）：
@@ -43,13 +43,14 @@ python3 "<本SKILL所在目录>/scripts/model_router.py" --host agy --agy-models
     - 只读审查：`python3 "<本SKILL所在目录>/scripts/codex_bridge.py" --mode review --cwd "<工作目录>" --model <slug> --effort <medium|high> "<审查重点>"`
     - 编码修改：`python3 "<本SKILL所在目录>/scripts/codex_bridge.py" --mode exec --sandbox workspace-write --cwd "<工作目录>" --model <slug> --effort <medium|high> "<编码任务>"`
   - **同池降档与无损兜底**：若旗舰型号超时或限流，`codex_bridge.py` 会自动在同一 Codex 池内降档重试高吞吐 `gpt-6.1-sol (medium)`；仅当同池重试仍输出 `[CODEX_BRIDGE_UNAVAILABLE]` 时，薄壳节点不得自行冒充 GPT 结论，须发帖告知主控拆分任务范围或在该成员 `waiting` 时热切换至 `Fallback` 模型。
-- **L3 只读检索、文档同步与后台守护（Lightweight & Daemons）**
-  - **职责**：只读代码/日志检索（`research`）、文档与注释更新（`docs`），以及伴生守护节点 `narrator` 与 `monitor`。
-  - **模型**：统一显式绑定 `gemini-4-hydrogen-medium`（复杂长链路检索可升至 `gemini-4-hydrogen-high`；未开放 Hydrogen 时回退 `gemini-3.8-flash-medium`，Gemini 桶 `0%` 时跨桶回退 `claude-sonnet-5-5-low`）。**严禁在 `monitor` / `narrator` / `research` 节点内调用 `codex_bridge.py` 或挂载旗舰模型**（即使 `codex_bridge.py` 被误赋予 `--role monitor/scout`，也会强制降级至 L3 轻量模型）。
+- **L3 只读检索、文档同步与按需守护（Lightweight & On-Demand Daemons）**
+  - **默认禁用常驻 `monitor` 轮询守护**：常规 Swarm（`≤ 4` 个业务 Worker 且非无人值守过夜任务）**严禁创建 `monitor`**（其 `*/3` Cron 唤醒卡在 5 分钟缓存 TTL 边缘，极易引发连续整窗缓存失配与深水区空耗）；仅在 `≥ 5` 个业务 Worker 的超长无人值守任务（如 `/goal`）或用户显式要求盯盘时，在 `brief` 中附 `[ALLOW_MONITOR]` 标记按需创建，且一旦业务 Worker 收口必须同轮立即 `kill` `monitor`。
+  - **模型**：只读检索（`research`）、文档同步（`docs`）及按需启用的 `narrator` / `monitor` 统一显式绑定 `gemini-4-hydrogen-medium`（复杂长链路检索可升至 `gemini-4-hydrogen-high`；未开放 Hydrogen 时回退 `gemini-3.8-flash-medium`，Gemini 桶 `0%` 时跨桶回退 `claude-sonnet-5-5-low`）。**严禁在 `monitor` / `narrator` / `research` 节点内调用 `codex_bridge.py` 或挂载旗舰模型**（即使 `codex_bridge.py` 被误赋予 `--role monitor/scout`，也会强制降级至 L3 轻量模型）。
 
-## 3. 运行时模型热切换约束
-- 升降级算力或触发低配额告警时，须在目标成员处于 `waiting` 状态时调用 `swarm(action="model", name="...", model="...")` 无损保留上下文切换；若处于 `working` 则等待当前轮次结束。
+## 3. 运行时模型热切换与防击穿收束约束
+- **初始一步到位，禁 `>30K` 随意切模**：Prompt Cache 与具体模型强绑定——创建成员时须按 `model_router.py` 一步到位绑定目标模型，**严禁非配额原因对已累积 `>30K` 上下文的活跃成员调用 `swarm(action="model")` 做横向或降档试探切模**。仅限以下三种合法场景在目标成员 `waiting` 时无损热切：① 触发 `429` / 配额归零（`0%`）跨桶兜底；② 连续两轮修复未果需升 `-high` 攻坚；③ 用户口头明确要求换模。
 - **严禁通过 `kill` + 重新 `add` 更换模型**，以免销毁对话历史与 `share`/`branch` 隔离工作区。
+- **跨轮次收束与防看板堆积**：同一会话完结一轮 Swarm 后，若主控上下文已超 `120K`，须提示用户先执行 `/compact`；若开启**全新独立需求的新一轮 Swarm**，主动建议用户**新开会话**（`/compact` 不会清空旧轮次留言板历史 `#seq`，单会话连跑多轮会导致新成员拉取百条旧帖直冲深水区）。
 
 ## 4. Swarm Token 账单与空转监控
 - 原生 Swarm 面板仅读取 `members.json` 的宿主薄壳模型（如 Codex 桥接节点的 `hydrogen` 壳）；启用 GPT/Codex 混编或需查看真实执行模型与分模型 Token 账单时，优先在回复中附上 `[Swarm Mix](sidecar://swarm-mix/swarm_board/)`（自动将桥接成员主模型提升显示为实际 `gpt-*` 型号并标注 `shell`，同时精确拆分双池 Token 消耗），或运行 `../scripts/swarm_tokens.py --host agy --markdown`（终端 `swarm-tokens --watch`），发现 `monitor`/`narrator` 空转占比过高时及时收敛或清理已完结 Swarm。
